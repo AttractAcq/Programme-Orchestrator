@@ -1,0 +1,19 @@
+services:
+  api:
+    build: .
+    command: ["node", "src/cli.js", "serve"]
+    env_file: .env
+    ports:
+      - "4317:4317"
+    volumes:
+      - ./data:/app/data
+      - ./.orchestrator:/app/.orchestrator
+      - ${TARGET_REPO_PATH}:${TARGET_REPO_PATH}
+  worker:
+    build: .
+    command: ["node", "src/cli.js", "worker"]
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./.orchestrator:/app/.orchestrator
+      - ${TARGET_REPO_PATH}:${TARGET_REPO_PATH}

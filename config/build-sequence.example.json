@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "programme": {
+    "id": "cockpit-complete-build",
+    "name": "Cockpit Complete Build Programme",
+    "target_repository": {
+      "full_name": "AttractAcq/Cockpit",
+      "local_path": "/absolute/path/to/Cockpit",
+      "remote": "origin"
+    }
+  },
+  "defaults": {
+    "git": {
+      "base_branch": "main",
+      "branch_prefix": "orchestrator",
+      "integration_branch": "programme/cockpit-complete-build",
+      "auto_commit": true,
+      "auto_push": false,
+      "push_integration_branch": false,
+      "cleanup_worktree_on_success": false
+    },
+    "agent": {
+      "provider": "mock",
+      "sandbox": "workspace-write",
+      "timeout_ms": 7200000
+    },
+    "verification": {
+      "commands": [
+        { "command": "npm", "args": ["run", "typecheck"] },
+        { "command": "npm", "args": ["run", "lint"] },
+        { "command": "npm", "args": ["test"] },
+        { "command": "npm", "args": ["run", "build"] },
+        { "command": "git", "args": ["diff", "--check"] }
+      ],
+      "verifier_agent": { "enabled": false, "sandbox": "read-only" }
+    }
+  },
+  "phases": [
+    {
+      "id": "phase-1",
+      "name": "Core Cockpit Completion",
+      "stages": [
+        {
+          "id": "A",
+          "name": "Canonical Architecture and Data Model",
+          "prompt_path": "programme/phase-1/prompts/stage-a.md",
+          "depends_on": [],
+          "requires_human_approval": true
+        },
+        {
+          "id": "B",
+          "name": "Next Core Stage",
+          "prompt_path": "programme/phase-1/prompts/stage-b.md",
+          "depends_on": ["A"],
+          "requires_human_approval": true
+        }
+      ]
+    }
+  ]
+}
