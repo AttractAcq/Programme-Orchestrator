@@ -11,7 +11,7 @@ Where the imported prompt body uses a root-level filename, use the matching `doc
 
 ---
 
-You are operating inside Attract Acquisition’s `AttractAcq/Cockpit` repository and are responsible for implementing **Programme Stage A — Repository Reconciliation and Frozen Baseline** from the canonical Cockpit build programme.
+You are operating inside Attract Acquisition’s `AttractAcq/Cockpit` repository and are responsible for implementing **Programme Stage J — Reel Studio Completion** from the canonical Cockpit build programme.
 
 This is an implementation task, not a speculative architecture exercise. First understand the actual repository, current deployed and local state, the Attract Acquisition business model, and how this stage fits into the complete Cockpit operating chain. Then implement the stage fully, integrate it with all preceding stages and existing systems, verify the result, and leave complete documentation and evidence.
 
@@ -48,7 +48,7 @@ Do not create a parallel lifecycle, a second source of truth, or a shortcut that
 
 ## Dependency position
 
-There is no earlier Programme Stage. Establish the verified baseline required for all later work.
+Programme Stages A, B, C, D, E, F, G, H, I are prerequisites. Confirm their canonical outputs and contracts are present and preserve them. Do not redesign or bypass completed earlier stages. Where a prerequisite is genuinely absent, implement only the minimum safe prerequisite required, document the discrepancy and do not falsely mark this stage complete.
 
 ## Mandatory operating rules
 
@@ -66,106 +66,179 @@ There is no earlier Programme Stage. Establish the verified baseline required fo
 12. **Avoid unforced errors.** Check naming, status enums, nullable fields, timestamps, indexes, uniqueness, transactions, pagination, concurrency, stale leases, retries, duplicate submissions, empty states, error states, accessibility, responsive behaviour and backwards compatibility.
 13. **Do not commit, push, deploy or mutate a real client unless the current task and repository authority explicitly permit it.** Use disposable fixtures and safe test clients for destructive or provider-backed verification.
 
-## Authoritative Stage A requirements
+## Authoritative Stage J requirements
 
 ## Objective
 
-Create one verified starting state that includes all current local Ideation and Reel Studio work before architecture migration begins.
+Turn Reel Studio into a complete, multi-path Reel production system that can create finished, publishable assets efficiently.
 
-## Why this stage is first
+## Preserve
 
-The GitHub audit is based on pushed `main`, while current Ideation work may exist only in the local Desktop repository.
-
-No reliable build plan can be executed against an uncertain baseline.
+- Brief binding
+- Story strategy
+- Story spine
+- Continuity plan
+- Narrative roles
+- Critique and repair
+- Prompt compiler
+- Still and clip generation
+- Retry and recovery
+- Final deliverable review
+- Distribution draft
 
 ## Scope
 
-### Repository state
+### Reel production strategies
 
-- Inspect the local working tree.
-- Identify all tracked modifications and untracked files.
-- Separate:
-  - Ideation work
-  - Reel Studio work
-  - Documentation
-  - Migrations
-  - Unrelated experiments
-  - Local-only settings
-- Confirm the active Supabase project.
-- Confirm deployed versus local Edge Functions.
-- Confirm frontend deployment commit.
-- Create a named audit snapshot branch or commit.
-- Push the snapshot to GitHub.
+Support several strategies:
 
-### Baseline verification
+1. **Proof Editorial**
+   - Screenshots
+   - Reviews
+   - Documents
+   - Project footage
+   - Animated evidence
 
-Run:
+2. **Motion Explainer**
+   - Diagrams
+   - Kinetic typography
+   - Comparisons
+   - Infographics
 
-- Typecheck
-- Build
-- Lint
-- Full deterministic tests
-- Migration dry run
-- Supabase project guard
-- Secret scan
-- Git diff check
+3. **Cinematic AI**
+   - Generated stills
+   - Image-to-video
+   - Text-to-video inserts
 
-### Current-state inventory
+4. **Founder or Client Footage**
+   - Talking head
+   - Interviews
+   - Site footage
+   - Screen recordings
 
-Produce a machine-readable inventory of:
+5. **Hybrid**
+   - Real evidence
+   - Motion graphics
+   - Selective AI-generated inserts
 
-- Frontend routes and client tabs
-- Database tables and views
-- RPCs
-- Edge Functions
-- Cron jobs
-- External-provider calls
-- Production states
-- Placeholder tabs
-- Deprecated paths
+### Strategy selection
+
+The Brief should determine the appropriate production strategy based on:
+
+- Objective
+- Proof available
+- Real footage available
+- Brand
+- Cost
+- Timeline
+- Quality requirement
+- Client automation policy
+
+### Audio
+
+Implement:
+
+- Voice source
+- Real voice
+- Consent-based voice clone
+- AI narrator
+- Music
+- Sound effects
+- Loudness standard
+- Caption timing
+
+### Final assembly
+
+Create a composition contract containing:
+
+- Timeline
+- Shot or scene order
+- Duration
+- Voice track
+- Visual layers
+- Captions
+- Motion instructions
+- Transitions
+- Audio
+- CTA frame
+
+Support:
+
+- External human-editor handoff
+- Automated template rendering
+- Provider-based rendering
+- Final manual upload
+
+### Storyboard quality gate
+
+Preserve and enforce:
+
+- No category below minimum
+- Coherence
+- Dependency
+- Brand alignment
+- Proof integrity
+- Ending payoff
+- Production feasibility
+
+### Style systems
+
+Create:
+
+- AA Reel style
+- Per-client Reel style configuration
+- Motion presets
+- Typography
+- Evidence treatment
+- Caption system
+- Intro and outro
+- Sound system
 
 ## Required outputs
 
-- One pushed baseline branch or commit
-- Updated repository-state document
-- Updated migration ledger
-- Current test count and pass/fail record
-- Current deployed-function list
-- Current database-entity inventory
-- Current local-only changes reconciled
+- Reel strategy selector
+- Extended structured storyboard
+- Audio workflow
+- Composition contract
+- Render adapter
+- Human-editor handoff package
+- Final Reel deliverable
+- Per-client style configuration
+- Cost and generation controls
+
+## Tests
+
+- Every strategy can produce a complete test deliverable.
+- Proof Editorial does not fabricate proof.
+- Motion Explainer preserves exact statistics and text.
+- Cinematic AI retains continuity.
+- Human-footage path preserves source rights.
+- Final duration and captions align.
+- Failed render can be recovered.
+- Final deliverable is the only Reel asset eligible for publishing.
 
 ## Acceptance criteria
 
-- The working tree is clean after the baseline snapshot.
-- GitHub contains the exact code state being planned against.
-- No secrets or local settings are committed.
-- Every migration is classified as:
-  - applied
-  - pending
-  - held
-  - obsolete
-- Every Edge Function is classified as:
-  - deployed and used
-  - deployed but disconnected
-  - local only
-  - deprecated
-- The build and deterministic test suite pass.
-- The baseline commit SHA is recorded in this document or a linked implementation log.
+- A Content Item can move from approved Brief to finished Reel.
+- At least one AA Reel is produced by each required strategy.
+- At least one external-client-style Reel is produced using real Proof.
+- The final output can be reviewed, approved and distributed without a disconnected manual data process.
+- Source project or render specification is retained.
 
 ## Exit gate
 
-No Stage B schema or architecture change starts until the repository and deployment baseline are reproducible.
+Reel production is complete enough to support repeatable AA marketing and initial client fulfilment.
 
 ---
 
 ## Full-circle implementation instruction
 
-Complete every part of Programme Stage A required to satisfy its objective, scope, required outputs, acceptance criteria and exit gate.
+Complete every part of Programme Stage J required to satisfy its objective, scope, required outputs, acceptance criteria and exit gate.
 
 Work through the repository end to end:
 
 1. Map the current implementation relevant to this stage, including UI, shared types, API functions, database tables/views/RPCs, Edge Functions, queues or cron jobs, tests, documentation and deployment state.
-2. Identify the exact gap between the current implementation and the Stage A target without replacing working systems unnecessarily.
+2. Identify the exact gap between the current implementation and the Stage J target without replacing working systems unnecessarily.
 3. Define or confirm the canonical ownership and state model before writing code.
 4. Implement all schema changes through ordered, reversible migrations with correct constraints, indexes, RLS, grants and compatibility behaviour.
 5. Implement backend and Edge Function logic with strict validation, client ownership, idempotency, provenance, failure handling and deterministic state transitions.
@@ -173,9 +246,9 @@ Work through the repository end to end:
 7. Implement or update every required operator UI, including clear status, source and provenance visibility, approval boundaries, empty/error/retry/conflict states and safe actions.
 8. Connect the stage to the canonical Cockpit spine and all completed earlier stages. Do not create an isolated feature or leave adapters incomplete.
 9. Preserve historical data and current operations through compatibility adapters, projections, dual writes, backfills or controlled cutovers as required.
-10. Remove or disable obsolete behaviour only where the Stage A requirements explicitly permit it and the replacement path is proven.
+10. Remove or disable obsolete behaviour only where the Stage J requirements explicitly permit it and the replacement path is proven.
 11. Add comprehensive deterministic, database, integration and UI coverage for successful, invalid, duplicate, stale, cross-client, retry, partial and failure scenarios.
-12. Update repository documentation and produce a Stage A implementation report containing changed files, migrations, functions, state transitions, tests, deployment requirements, live-verification evidence and any explicitly deferred item.
+12. Update repository documentation and produce a Stage J implementation report containing changed files, migrations, functions, state transitions, tests, deployment requirements, live-verification evidence and any explicitly deferred item.
 
 Do not stop after producing recommendations. Do not leave TODO placeholders for work that belongs to this stage. Do not weaken validation or security to make tests pass. Do not silently alter the locked architecture.
 
@@ -215,7 +288,7 @@ At completion, return a structured report containing:
 - Deployment actions performed or still requiring explicit authority
 - Live verification completed
 - Deferred or blocked items, with precise reasons
-- Confirmation against every Stage A acceptance criterion
-- Confirmation that the Stage A exit gate is satisfied
+- Confirmation against every Stage J acceptance criterion
+- Confirmation that the Stage J exit gate is satisfied
 
 The stage is complete only when the repository implements the intended behaviour as one integrated part of Cockpit and all verification is clean.

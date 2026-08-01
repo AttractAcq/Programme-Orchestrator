@@ -26,7 +26,7 @@
       "cleanup_worktree_on_success": false
     },
     "agent": {
-      "provider": "mock",
+      "provider": "codex-exec",
       "sandbox": "workspace-write",
       "timeout_ms": 7200000
     },
@@ -72,7 +72,7 @@
         }
       ],
       "verifier_agent": {
-        "enabled": false,
+        "enabled": true,
         "sandbox": "read-only"
       }
     }
@@ -98,7 +98,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -115,7 +115,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -132,7 +132,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -149,7 +149,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -166,7 +166,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -183,7 +183,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -200,7 +200,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -217,7 +217,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -234,7 +234,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -251,7 +251,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -268,7 +268,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -285,7 +285,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -302,7 +302,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -319,7 +319,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -336,7 +336,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -353,7 +353,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -379,7 +379,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -396,7 +396,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -413,7 +413,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -430,7 +430,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -447,7 +447,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -464,7 +464,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -490,7 +490,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -507,7 +507,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -524,7 +524,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -541,7 +541,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -558,7 +558,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -575,7 +575,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -592,7 +592,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -618,7 +618,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -635,7 +635,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -652,7 +652,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -669,7 +669,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -686,7 +686,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -703,7 +703,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -720,7 +720,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -737,7 +737,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -754,7 +754,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -771,7 +771,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -788,7 +788,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -805,7 +805,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -822,7 +822,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }
@@ -839,7 +839,7 @@
           "verification": {
             "commands": [],
             "verifier_agent": {
-              "enabled": false,
+              "enabled": true,
               "sandbox": "read-only"
             }
           }

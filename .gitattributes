@@ -1,0 +1,2 @@
+# Approved programme Markdown contains intentional trailing spaces for hard line breaks.
+config/programme/**/*.md -whitespace

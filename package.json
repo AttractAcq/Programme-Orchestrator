@@ -4,16 +4,21 @@
   "description": "Durable, dependency-aware orchestration backend for the Attract Acquisition Cockpit build programme.",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=22.0.0" },
-  "bin": { "cpo": "src/cli.js" },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "bin": {
+    "cpo": "src/cli.js"
+  },
   "scripts": {
     "dev": "node src/cli.js serve",
     "worker": "node src/cli.js worker",
     "start": "node src/cli.js serve",
     "test": "node --test",
     "check:syntax": "node scripts/check-syntax.mjs",
-    "check": "npm run check:syntax && npm test",
+    "check": "npm run check:syntax && npm run validate:programme && npm test",
     "validate": "node src/cli.js validate",
-    "status": "node src/cli.js status"
+    "status": "node src/cli.js status",
+    "validate:programme": "node scripts/validate-programme-authority.mjs"
   }
 }

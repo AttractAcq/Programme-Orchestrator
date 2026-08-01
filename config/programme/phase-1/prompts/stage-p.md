@@ -11,7 +11,7 @@ Where the imported prompt body uses a root-level filename, use the matching `doc
 
 ---
 
-You are operating inside Attract Acquisition’s `AttractAcq/Cockpit` repository and are responsible for implementing **Programme Stage A — Repository Reconciliation and Frozen Baseline** from the canonical Cockpit build programme.
+You are operating inside Attract Acquisition’s `AttractAcq/Cockpit` repository and are responsible for implementing **Programme Stage P — End-to-End Hardening and Legacy Retirement** from the canonical Cockpit build programme.
 
 This is an implementation task, not a speculative architecture exercise. First understand the actual repository, current deployed and local state, the Attract Acquisition business model, and how this stage fits into the complete Cockpit operating chain. Then implement the stage fully, integrate it with all preceding stages and existing systems, verify the result, and leave complete documentation and evidence.
 
@@ -48,7 +48,7 @@ Do not create a parallel lifecycle, a second source of truth, or a shortcut that
 
 ## Dependency position
 
-There is no earlier Programme Stage. Establish the verified baseline required for all later work.
+Programme Stages A, B, C, D, E, F, G, H, I, J, K, L, M, N, O are prerequisites. Confirm their canonical outputs and contracts are present and preserve them. Do not redesign or bypass completed earlier stages. Where a prerequisite is genuinely absent, implement only the minimum safe prerequisite required, document the discrepancy and do not falsely mark this stage complete.
 
 ## Mandatory operating rules
 
@@ -66,106 +66,150 @@ There is no earlier Programme Stage. Establish the verified baseline required fo
 12. **Avoid unforced errors.** Check naming, status enums, nullable fields, timestamps, indexes, uniqueness, transactions, pagination, concurrency, stale leases, retries, duplicate submissions, empty states, error states, accessibility, responsive behaviour and backwards compatibility.
 13. **Do not commit, push, deploy or mutate a real client unless the current task and repository authority explicitly permit it.** Use disposable fixtures and safe test clients for destructive or provider-backed verification.
 
-## Authoritative Stage A requirements
+## Authoritative Stage P requirements
 
 ## Objective
 
-Create one verified starting state that includes all current local Ideation and Reel Studio work before architecture migration begins.
-
-## Why this stage is first
-
-The GitHub audit is based on pushed `main`, while current Ideation work may exist only in the local Desktop repository.
-
-No reliable build plan can be executed against an uncertain baseline.
+Verify the complete system in production-like conditions, cut over from compatibility paths and retire obsolete architecture.
 
 ## Scope
 
-### Repository state
+### End-to-end golden paths
 
-- Inspect the local working tree.
-- Identify all tracked modifications and untracked files.
-- Separate:
-  - Ideation work
-  - Reel Studio work
-  - Documentation
-  - Migrations
-  - Unrelated experiments
-  - Local-only settings
-- Confirm the active Supabase project.
-- Confirm deployed versus local Edge Functions.
-- Confirm frontend deployment commit.
-- Create a named audit snapshot branch or commit.
-- Push the snapshot to GitHub.
+Test:
 
-### Baseline verification
+#### Manual Idea path
 
-Run:
+```text
+Manual Idea
+→ Opportunity
+→ Slot
+→ Content Item
+→ Brief
+→ Production
+→ Approval
+→ Publication
+→ Analytics
+→ Iteration
+```
 
-- Typecheck
-- Build
-- Lint
-- Full deterministic tests
-- Migration dry run
-- Supabase project guard
-- Secret scan
-- Git diff check
+#### Proof path
 
-### Current-state inventory
+```text
+Proof Upload
+→ Proof Item
+→ Opportunity
+→ Content Item
+→ Reel and Carousel
+→ Publication
+→ Performance
+→ Reuse
+```
 
-Produce a machine-readable inventory of:
+#### Research path
 
-- Frontend routes and client tabs
-- Database tables and views
-- RPCs
-- Edge Functions
-- Cron jobs
-- External-provider calls
-- Production states
-- Placeholder tabs
-- Deprecated paths
+```text
+Seven-Technique Research
+→ Candidate
+→ Score
+→ Opportunity
+→ Proposed Calendar
+→ Commitment
+→ Production
+→ Distribution
+```
 
-## Required outputs
+#### Performance path
 
-- One pushed baseline branch or commit
-- Updated repository-state document
-- Updated migration ledger
-- Current test count and pass/fail record
-- Current deployed-function list
-- Current database-entity inventory
-- Current local-only changes reconciled
+```text
+Published winner
+→ Performance Insight
+→ New Opportunity
+→ Paid promotion or derivative content
+```
+
+#### Ad path
+
+```text
+Ad Opportunity
+→ Ad Brief
+→ Variants
+→ Campaign
+→ Spend
+→ Lead
+→ Cash-collected attribution
+```
+
+### Migration
+
+- Backfill Content Items for active legacy master rows.
+- Backfill source and Opportunity links where evidence permits.
+- Verify dual-write parity.
+- Cut reads to canonical entities.
+- Stop new legacy Phase 3 direct generation.
+- Archive compatibility functions.
+- Remove deprecated UI actions.
+- Retain historical records.
+
+### Hardening
+
+- Security review
+- RLS review
+- Secret review
+- Cost-abuse controls
+- Rate limiting
+- Provider failure simulation
+- Recovery testing
+- Data export
+- Audit log completeness
+- Backup and restoration
+- Accessibility
+- Performance
+- Mobile operator usability where required
+
+### Documentation
+
+Create:
+
+- Operator manual
+- Client approval guide
+- Architecture guide
+- Incident runbook
+- Provider runbook
+- Migration guide
+- Automation policy guide
+- Data dictionary
 
 ## Acceptance criteria
 
-- The working tree is clean after the baseline snapshot.
-- GitHub contains the exact code state being planned against.
-- No secrets or local settings are committed.
-- Every migration is classified as:
-  - applied
-  - pending
-  - held
-  - obsolete
-- Every Edge Function is classified as:
-  - deployed and used
-  - deployed but disconnected
-  - local only
-  - deprecated
-- The build and deterministic test suite pass.
-- The baseline commit SHA is recorded in this document or a linked implementation log.
+The system is complete only when:
+
+- All four source streams operate.
+- All selected Opportunities become canonical Content Items.
+- All Instagram formats can be produced and distributed.
+- Reels can be completed through at least the required production strategies.
+- Ads can be created, launched and measured.
+- Performance creates controlled learning.
+- Automation can run validated workflows under policy.
+- Multi-client data is isolated.
+- Costs and failures are visible.
+- Legacy direct Phase 3 is no longer the primary workflow.
+- No required operational step exists only in undocumented manual knowledge.
 
 ## Exit gate
 
-No Stage B schema or architecture change starts until the repository and deployment baseline are reproducible.
+The new architecture is the sole supported operating model for new work.
 
 ---
 
 ## Full-circle implementation instruction
 
-Complete every part of Programme Stage A required to satisfy its objective, scope, required outputs, acceptance criteria and exit gate.
+Complete every part of Programme Stage P required to satisfy its objective, scope, required outputs, acceptance criteria and exit gate.
 
 Work through the repository end to end:
 
 1. Map the current implementation relevant to this stage, including UI, shared types, API functions, database tables/views/RPCs, Edge Functions, queues or cron jobs, tests, documentation and deployment state.
-2. Identify the exact gap between the current implementation and the Stage A target without replacing working systems unnecessarily.
+2. Identify the exact gap between the current implementation and the Stage P target without replacing working systems unnecessarily.
 3. Define or confirm the canonical ownership and state model before writing code.
 4. Implement all schema changes through ordered, reversible migrations with correct constraints, indexes, RLS, grants and compatibility behaviour.
 5. Implement backend and Edge Function logic with strict validation, client ownership, idempotency, provenance, failure handling and deterministic state transitions.
@@ -173,9 +217,9 @@ Work through the repository end to end:
 7. Implement or update every required operator UI, including clear status, source and provenance visibility, approval boundaries, empty/error/retry/conflict states and safe actions.
 8. Connect the stage to the canonical Cockpit spine and all completed earlier stages. Do not create an isolated feature or leave adapters incomplete.
 9. Preserve historical data and current operations through compatibility adapters, projections, dual writes, backfills or controlled cutovers as required.
-10. Remove or disable obsolete behaviour only where the Stage A requirements explicitly permit it and the replacement path is proven.
+10. Remove or disable obsolete behaviour only where the Stage P requirements explicitly permit it and the replacement path is proven.
 11. Add comprehensive deterministic, database, integration and UI coverage for successful, invalid, duplicate, stale, cross-client, retry, partial and failure scenarios.
-12. Update repository documentation and produce a Stage A implementation report containing changed files, migrations, functions, state transitions, tests, deployment requirements, live-verification evidence and any explicitly deferred item.
+12. Update repository documentation and produce a Stage P implementation report containing changed files, migrations, functions, state transitions, tests, deployment requirements, live-verification evidence and any explicitly deferred item.
 
 Do not stop after producing recommendations. Do not leave TODO placeholders for work that belongs to this stage. Do not weaken validation or security to make tests pass. Do not silently alter the locked architecture.
 
@@ -215,7 +259,7 @@ At completion, return a structured report containing:
 - Deployment actions performed or still requiring explicit authority
 - Live verification completed
 - Deferred or blocked items, with precise reasons
-- Confirmation against every Stage A acceptance criterion
-- Confirmation that the Stage A exit gate is satisfied
+- Confirmation against every Stage P acceptance criterion
+- Confirmation that the Stage P exit gate is satisfied
 
 The stage is complete only when the repository implements the intended behaviour as one integrated part of Cockpit and all verification is clean.

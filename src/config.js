@@ -5,7 +5,7 @@ export function loadConfig(overrides = {}) {
   return {
     host: env.HOST || '127.0.0.1',
     port: positiveInteger(env.PORT, 4317),
-    manifestPath: path.resolve(env.MANIFEST_PATH || './config/build-sequence.example.json'),
+    manifestPath: path.resolve(env.MANIFEST_PATH || './config/BUILD_SEQUENCE.json'),
     statePath: path.resolve(env.STATE_PATH || './data/state.json'),
     eventLogPath: path.resolve(env.EVENT_LOG_PATH || './data/events.jsonl'),
     worktreeRoot: path.resolve(env.WORKTREE_ROOT || './.orchestrator/worktrees'),

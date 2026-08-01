@@ -34,6 +34,13 @@ export async function loadManifest(manifestPath) {
     for (const dependency of phase.depends_on ?? []) {
       if (!phases.has(dependency)) throw new Error(`Unknown phase dependency ${dependency} in ${phase.id}`);
     }
+    for (const authorityPath of [phase.build_plan_path, ...(phase.authority_paths ?? [])].filter(Boolean)) {
+      const authority = path.resolve(rootDir, authorityPath);
+      if (!isWithin(rootDir, authority)) throw new Error(`Authority path escapes manifest directory: ${authorityPath}`);
+      await access(authority).catch(() => {
+        throw new Error(`Authority file not found: ${authorityPath}`);
+      });
+    }
     const phaseStageDependencies = (phase.depends_on ?? []).flatMap((dependency) => phases.get(dependency).stages.map((stage) => stage.id));
     for (const stage of phase.stages) {
       for (const dependency of stage.depends_on ?? []) {

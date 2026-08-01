@@ -1,0 +1,275 @@
+{
+  "schema_version": 1,
+  "files": {
+    "README.md": {
+      "sha256": "f808781806ec92fe2d7d690f30c3772601a7e4e192e2de2a0d9ba8292f511edf",
+      "bytes": 1854,
+      "generated": true
+    },
+    "phase-1/README.md": {
+      "sha256": "17ceae6d764deb705b8d118fe1d182f03f5710cdb81a58312089f07b7e1b26d1",
+      "bytes": 1237,
+      "generated": true
+    },
+    "phase-1/architecture-audit.md": {
+      "sha256": "0988ac4cf18da79f956e88386a067edb1476e5cef3443e99effba87774e66dd5",
+      "bytes": 32545,
+      "generated": false
+    },
+    "phase-1/build-plan.md": {
+      "sha256": "f95d735e16b0b2c427a4e937fc2fc4cd5fff1cf170ab5157d551f07b280395fd",
+      "bytes": 58094,
+      "generated": false
+    },
+    "phase-1/prompt-collection.md": {
+      "sha256": "97adc969b1c1c4f288b10497ca3bdb47642f89880edb0b968329daa134debc6a",
+      "bytes": 218145,
+      "generated": false
+    },
+    "phase-1/prompts/stage-a.md": {
+      "sha256": "cef04b4799cce908a4f160d03b2f662412b4911fdf46bbbae7c5e61bc9906d4f",
+      "bytes": 13612,
+      "generated": true
+    },
+    "phase-1/prompts/stage-b.md": {
+      "sha256": "dfab07576232e745c91d5f76a6509d32e2340ea758c565bb1643d1c51e22be8d",
+      "bytes": 14866,
+      "generated": true
+    },
+    "phase-1/prompts/stage-c.md": {
+      "sha256": "a67415d663e058c666010c50b04198ec56c62f297ab798288cd3a9bb397ce97f",
+      "bytes": 14733,
+      "generated": true
+    },
+    "phase-1/prompts/stage-d.md": {
+      "sha256": "3b448c7ef77a10391614033d1fd584189b5e1b2be605e92b3f60e3ef316bfa0d",
+      "bytes": 14342,
+      "generated": true
+    },
+    "phase-1/prompts/stage-e.md": {
+      "sha256": "1d772443c4fd7d809bfa05fff3bbbd1453ee1aff777108e13a9275bf805f7201",
+      "bytes": 14740,
+      "generated": true
+    },
+    "phase-1/prompts/stage-f.md": {
+      "sha256": "43d1c72c290a807a44f9cbcaba1d74c5afafb21b81ef3b7c011d4625ef0df1dd",
+      "bytes": 14302,
+      "generated": true
+    },
+    "phase-1/prompts/stage-g.md": {
+      "sha256": "8e758de98d6ed42996d2d9f8b6724d90a35f6be626b6914c3b1b5e11ec390e19",
+      "bytes": 14401,
+      "generated": true
+    },
+    "phase-1/prompts/stage-h.md": {
+      "sha256": "2e7bd7d159cabfe48c9070cdb2cbf25be02e51a8a99a5e7756fc512b33d2ffb2",
+      "bytes": 13592,
+      "generated": true
+    },
+    "phase-1/prompts/stage-i.md": {
+      "sha256": "794a38c75bcc82c3038cc25c6cbb0cfc9e67b07d84244171d11cdb1b571f11f7",
+      "bytes": 13590,
+      "generated": true
+    },
+    "phase-1/prompts/stage-j.md": {
+      "sha256": "d2496d22b2af49b06a522dc7aa16c19512bdd65aef240e58e4beceed9f05a889",
+      "bytes": 14837,
+      "generated": true
+    },
+    "phase-1/prompts/stage-k.md": {
+      "sha256": "7eface19a3d2f18e5f8c9c0b67bafd65427c9a5422f562ca8d26389ceb608954",
+      "bytes": 13436,
+      "generated": true
+    },
+    "phase-1/prompts/stage-l.md": {
+      "sha256": "d4c78ca5c8d656f32e5bebb228f3e667ab4454327e4c3baef8e6e50b292c3695",
+      "bytes": 13815,
+      "generated": true
+    },
+    "phase-1/prompts/stage-m.md": {
+      "sha256": "62d3d8d5e263b7ecf6b600e3eb7c10a6aaa09a54e9be335e6a9c693b59745fec",
+      "bytes": 14056,
+      "generated": true
+    },
+    "phase-1/prompts/stage-n.md": {
+      "sha256": "4bf55e59de94990fe3b52e3c207c874e9e0dfb76843a3864d2f07adf05f6ba5b",
+      "bytes": 13893,
+      "generated": true
+    },
+    "phase-1/prompts/stage-o.md": {
+      "sha256": "648e4b9ef6359b950a02673c21b9fd92178be8ac618ad776e5868b845f3b5a97",
+      "bytes": 13626,
+      "generated": true
+    },
+    "phase-1/prompts/stage-p.md": {
+      "sha256": "59f1b32a112404a21257a3ab6cd6dde2955e941a765258f6f82a8b902232aa33",
+      "bytes": 14199,
+      "generated": true
+    },
+    "phase-1b/README.md": {
+      "sha256": "94a187a8e073dbf622497ada0743206e8e27f2f5b528772dd07de4c3b4838ee5",
+      "bytes": 681,
+      "generated": true
+    },
+    "phase-1b/facebook-build-plan.md": {
+      "sha256": "ed5ac15bca25600c24a6c7e77b78a9846c912d9873d5b88bccdc204d5e349288",
+      "bytes": 14520,
+      "generated": true
+    },
+    "phase-1b/prompts/stage-1b-a.md": {
+      "sha256": "20c86bcff837dadac541b0b8dea7cd5120fa713b6026552042b69a70ce45f593",
+      "bytes": 6347,
+      "generated": true
+    },
+    "phase-1b/prompts/stage-1b-b.md": {
+      "sha256": "2fcced9a01bb6149681b589608c266e8b01f5025b8ad5e15ac0cb640d69b2c8c",
+      "bytes": 6187,
+      "generated": true
+    },
+    "phase-1b/prompts/stage-1b-c.md": {
+      "sha256": "b7f0fedd7fe27c67c1ed5134ab9f4e7170e846ed5bc3f026080800809640f322",
+      "bytes": 6260,
+      "generated": true
+    },
+    "phase-1b/prompts/stage-1b-d.md": {
+      "sha256": "eb6d9741d33ad2debd607272b91b71e5ebb251f6a05a44e3787e87034b835677",
+      "bytes": 6340,
+      "generated": true
+    },
+    "phase-1b/prompts/stage-1b-e.md": {
+      "sha256": "46387289693351ff3c0514f851875a8b8e69bf1c53adf32634842c60f612aa8c",
+      "bytes": 6275,
+      "generated": true
+    },
+    "phase-1b/prompts/stage-1b-f.md": {
+      "sha256": "253c6d145536ee7e4a9f6604cc4735b56a89db85002b8522243fab095db214b7",
+      "bytes": 6657,
+      "generated": true
+    },
+    "phase-2a/README.md": {
+      "sha256": "92c6512d0a0b763042c9909541c3eb754bb8e1509858e39e7c8c5e2f12e9bb04",
+      "bytes": 688,
+      "generated": true
+    },
+    "phase-2a/market-intelligence-build-plan.md": {
+      "sha256": "6cdc48e7a1852a8b17701ba424e4a6a489945630318df2f4178045fdd6644a78",
+      "bytes": 44180,
+      "generated": false
+    },
+    "phase-2a/prompts/stage-2a-a.md": {
+      "sha256": "d72405420e8e283b2a7ca95d6f1cb08f1e3895f8244cee08d552293348c4c827",
+      "bytes": 7933,
+      "generated": true
+    },
+    "phase-2a/prompts/stage-2a-b.md": {
+      "sha256": "a28df14c8f8da50fe3dd31f3efe3beeabe49fa478fed49de9dae5917f3dd0d4c",
+      "bytes": 8748,
+      "generated": true
+    },
+    "phase-2a/prompts/stage-2a-c.md": {
+      "sha256": "8ac082cb4e4d7a9717e9533f1bf8339300c945d5758d6742f2b0c49be4c29937",
+      "bytes": 7237,
+      "generated": true
+    },
+    "phase-2a/prompts/stage-2a-d.md": {
+      "sha256": "84e13168273ddfd87859b20bb6a0f21e520a59992af150341d249fc7c2b5cb23",
+      "bytes": 7841,
+      "generated": true
+    },
+    "phase-2a/prompts/stage-2a-e.md": {
+      "sha256": "c9a736f3c97a0dc01fecd4c699e11f79f2effdcb2f376215567764a6428994be",
+      "bytes": 7380,
+      "generated": true
+    },
+    "phase-2a/prompts/stage-2a-f.md": {
+      "sha256": "1566b1085ea3c530d60ce0a2373d193fc3fd8f8e4573b409317f7cdb90f20681",
+      "bytes": 8291,
+      "generated": true
+    },
+    "phase-2a/prompts/stage-2a-g.md": {
+      "sha256": "8221a5c0a51853f92ee9db3f01115e6711447c3f3661e9c455adedb73b6647a4",
+      "bytes": 10379,
+      "generated": true
+    },
+    "phase-2b/README.md": {
+      "sha256": "40c2d5b06d35c7c7c91efe38bae23819122ffa02065d2aceab05782a43f7d707",
+      "bytes": 1110,
+      "generated": true
+    },
+    "phase-2b/ai-automation-build-plan.md": {
+      "sha256": "980eaf5f3009fa5239befe1d6f4d78d6fb390752ddb8378e0af0eeaeaa04c49d",
+      "bytes": 40879,
+      "generated": false
+    },
+    "phase-2b/prompts/stage-ai-a.md": {
+      "sha256": "6be6d7ffef7415114375a7cb48c8e66b409322eaca7e251de75c80ee9b75ddc1",
+      "bytes": 5291,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-b.md": {
+      "sha256": "198a8eac1bf00bbab082991ee3b0db8de404c7d25972c51c06f638dd4bf3b7c2",
+      "bytes": 5164,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-c.md": {
+      "sha256": "5e1e2c7aa080ccf765f37b085cd846f39e3d7e04c1487aaf2655c675e670f69b",
+      "bytes": 5156,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-d.md": {
+      "sha256": "b5009dcdb2cf259405660292ff9ed6781fa30fb9c631c51391ad38441374eec0",
+      "bytes": 5106,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-e.md": {
+      "sha256": "b5bd82e240a763eddd282c040e846f629be606cabf567da5ca46a861c966ec02",
+      "bytes": 5114,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-f.md": {
+      "sha256": "dbf4abd9f97b31bb4a10d1a28d1b6e073c0e3ca016389aa0474f4b1d3b2e1625",
+      "bytes": 5147,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-g.md": {
+      "sha256": "046dcc0b38f91026e1a731c6f6e4784c02eb47d511065a35b33b46f00f36559d",
+      "bytes": 5138,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-h.md": {
+      "sha256": "8027c8c1eb2848ff6e4d25b59d6d5ae3a9a3e79154529c2fbf922b95cb44d3ff",
+      "bytes": 5121,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-i.md": {
+      "sha256": "40459a6fca9ea993ec1f79098b655a167878d3ef8602f33fbc1241190414d395",
+      "bytes": 5136,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-j.md": {
+      "sha256": "ad187afec8711bc7a189f587244195fd50bab364d657d1e5390ae02206794da9",
+      "bytes": 5059,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-k.md": {
+      "sha256": "e93ec92c4daec6c44c2abb97d7ef4b2d29d33ec9b2845bf305f0936ae6116ada",
+      "bytes": 5191,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-l.md": {
+      "sha256": "179d896a441e9ead8f4cd105d48830426cd5d26833b7a7b400b0c5304cdec53a",
+      "bytes": 5121,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-m.md": {
+      "sha256": "112e8741837b60c40a8a3ee3d7b6bdd9762db251176cc65e1128e9246203e705",
+      "bytes": 6034,
+      "generated": true
+    },
+    "phase-2b/prompts/stage-ai-n.md": {
+      "sha256": "ecc06298499f7b47b6f86839c408281e3e632e9ffebcb94adb214d8cce182f02",
+      "bytes": 5070,
+      "generated": true
+    }
+  }
+}
