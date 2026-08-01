@@ -44,12 +44,12 @@ Approved source documents are retained, and every executable stage has a standal
 - Cumulative programme integration branch
 - Target repository and remote identity checks
 - `codex exec` and mock providers
-- Deterministic verification gates
-- Independent verifier-agent gate
+- Deterministic pre-commit verification gates
+- Independent pre-commit verifier-agent gate
 - Human approval and rejection
 - Automatic stage commits
 - Approval-gated integration-branch pushes
-- Cancellation, interruption recovery and non-mutating dry-run preflight
+- Failed-run verification recovery, interruption handling and non-mutating dry-run preflight
 - HTTP API and CLI
 - Docker and GitHub Actions
 - Zero third-party runtime dependencies
@@ -66,7 +66,23 @@ programme/cockpit-complete-build
 orchestrator/<stage>/<run-id>
 ```
 
-A builder works in an isolated worktree under an immutable policy that forbids commits, pushes, merges, `main` changes, tags, deployments, and production-data mutation. The orchestrator runs deterministic verification, invokes an independent read-only verifier with the exact stage authority, and creates the stage commit itself. Approval advances and pushes only the cumulative integration branch. No code path pushes `main`.
+A builder works in an isolated worktree under an immutable policy that forbids commits, pushes, merges, `main` changes, tags, deployments, and production-data mutation. The builder deliberately leaves the worktree dirty. The orchestrator runs deterministic verification, invokes an independent read-only verifier against that uncommitted diff, and creates the stage commit only after verification passes. Approval advances and pushes only the cumulative integration branch. No code path pushes `main`.
+
+The run records five separately owned gates: implementation, pre-commit verification, orchestrator commit, human approval, and post-approval integration/push. The normal order is:
+
+```text
+builder completes
+→ deterministic verification
+→ independent pre-commit verifier
+→ orchestrator creates stage commit
+→ awaiting approval
+→ human approval
+→ integration branch advances
+→ approved integration branch is pushed
+→ stage completed
+```
+
+During pre-commit verification, `HEAD` may still equal the stage base, intended changes must remain uncommitted, the isolated worktree is expected to be dirty, no stage or integration branch has been pushed, and no final snapshot SHA exists. These are `LIFECYCLE_PENDING` observations, not implementation failures. Incorrect or incomplete work, failed checks, unsafe or unrelated changes, missing evidence, stale/mocked claims, required current live verification, and a required but irreproducible migration chain remain genuine blockers when the stage authority requires them.
 
 ## Requirements
 
@@ -126,7 +142,7 @@ The provider streams JSONL to `data/runs/<run-id>.codex.jsonl`, stderr to `data/
 
 ## Approval flow
 
-After a successful build and verification, the run pauses in `awaiting_approval`.
+After a successful build and pre-commit verification, the orchestrator creates the stage commit and the run pauses in `awaiting_approval`.
 
 ```bash
 node src/cli.js approve <run-id> --by alex --note "Stage exit gate verified"
@@ -144,13 +160,23 @@ ls -la data/runs
 git -C /absolute/path/to/Cockpit worktree list
 ```
 
-Queued claims expire and are re-queued automatically. A run interrupted in `running`, `verifying`, or `awaiting_approval` retains its worktree and logs. Mark that stale run cancelled, inspect or archive its worktree, then explicitly rerun its stage:
+Queued claims expire and are re-queued automatically. A run interrupted in `running`, `verifying`, or `awaiting_approval` retains its worktree and logs. Mark a stale active run cancelled only after confirming its process has stopped.
+
+A run that reached `failed` after its builder completed can resume from its preserved pre-commit diff without rerunning the builder:
 
 ```bash
-node --env-file=.env src/cli.js cancel <run-id>
-node --env-file=.env src/cli.js run-stage A --dry-run
-node --env-file=.env src/cli.js run-stage A --by alex
+node --env-file=.env src/cli.js resume-run <run-id> --from verification --by <actor>
 ```
+
+For the preserved Stage A run, the exact command is:
+
+```bash
+node --env-file=.env src/cli.js resume-run 372ae278-31ff-42aa-8855-2c4321e32a18 --from verification --by <actor>
+```
+
+Recovery accepts only a failed run with successful builder evidence, a stored worktree, stage branch, and base commit. It refuses recovery if a builder/verifier or another run is active on that worktree/branch; if the stored path, repository, branch, branch tip, or ancestry does not match; if a stage commit already exists; or if the intended uncommitted diff is gone. It reruns deterministic checks and independent verification, appends a recovery attempt and verification record, and creates the commit only on success. Failure leaves the worktree, branch, builder metadata, logs, and all prior evidence in place.
+
+Recovery does not waive genuine verifier blockers. Commit, approval, integration, push, and final-snapshot requirements are lifecycle-pending because the orchestrator owns them. Live verification, reproducibility, implementation, safety, and evidence requirements remain verification blockers when later lifecycle actions cannot satisfy them.
 
 If an approval push fails, the run remains `awaiting_approval`; fix remote authentication/connectivity and repeat the same `approve` command. The integration update is fast-forward-only and retry-safe.
 
@@ -171,6 +197,7 @@ Endpoints:
 - `POST /api/programme/run-next`
 - `POST /api/stages/:stageId/run`
 - `POST /api/runs/:runId/cancel`
+- `POST /api/runs/:runId/resume` with `{"from":"verification","requestedBy":"<actor>"}`
 - `POST /api/runs/:runId/approve`
 - `POST /api/runs/:runId/reject`
 - `POST /api/programme/pause`

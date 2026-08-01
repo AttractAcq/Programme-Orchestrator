@@ -56,7 +56,7 @@ export function buildServer(deps) {
           { agentCheck: body.agentCheck ?? false },
         ));
       }
-      match = url.pathname.match(/^\/api\/runs\/([^/]+)\/(cancel|approve|reject)$/);
+      match = url.pathname.match(/^\/api\/runs\/([^/]+)\/(cancel|approve|reject|resume)$/);
       if (request.method === 'POST' && match) {
         const runId = decodeURIComponent(match[1]);
         const action = match[2];
@@ -66,6 +66,13 @@ export function buildServer(deps) {
         }
         if (action === 'approve') {
           return send(response, 200, await deps.execution.approve(runId, body.decidedBy ?? 'api', body.note));
+        }
+        if (action === 'resume') {
+          return send(response, 200, await deps.execution.resumeRun(
+            runId,
+            body.from,
+            body.requestedBy ?? body.by,
+          ));
         }
         return send(response, 200, await deps.execution.reject(runId, body.decidedBy ?? 'api', body.note));
       }

@@ -43,6 +43,15 @@ try {
     const actor = valueAfter(args, '--by') ?? 'cli';
     const note = valueAfter(args, '--note');
     console.log(JSON.stringify(await execution[command](runId, actor, note), null, 2));
+  } else if (command === 'resume-run') {
+    const runId = args[0];
+    if (!runId) throw new Error('resume-run requires a run id');
+    const from = valueAfter(args, '--from');
+    const actor = valueAfter(args, '--by');
+    if (!from) throw new Error('resume-run requires --from verification');
+    if (!actor) throw new Error('resume-run requires --by <actor>');
+    const { execution } = await bootstrap();
+    console.log(JSON.stringify(await execution.resumeRun(runId, from, actor), null, 2));
   } else if (command === 'cancel') {
     const runId = args[0];
     if (!runId) throw new Error('cancel requires a run id');
@@ -60,7 +69,7 @@ try {
     process.on('SIGTERM', stop);
     await worker.run();
   } else {
-    console.log(`Cockpit Programme Orchestrator\n\nCommands:\n  validate\n  status\n  run-next [--dry-run] [--agent-check] [--by actor]\n  run-stage <id> [--dry-run] [--agent-check] [--by actor]\n  approve <runId> [--by actor] [--note text]\n  reject <runId> [--by actor] [--note text]\n  cancel <runId>\n  serve\n  worker`);
+    console.log(`Cockpit Programme Orchestrator\n\nCommands:\n  validate\n  status\n  run-next [--dry-run] [--agent-check] [--by actor]\n  run-stage <id> [--dry-run] [--agent-check] [--by actor]\n  resume-run <runId> --from verification --by <actor>\n  approve <runId> [--by actor] [--note text]\n  reject <runId> [--by actor] [--note text]\n  cancel <runId>\n  serve\n  worker`);
   }
 } catch (error) {
   console.error(error instanceof Error ? error.stack : error);

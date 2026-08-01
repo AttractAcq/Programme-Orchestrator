@@ -1,4 +1,4 @@
-import { mkdir, rm, stat } from 'node:fs/promises';
+import { mkdir, realpath, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { runCommand } from '../utils/process.js';
 
@@ -116,6 +116,40 @@ export class GitService {
       mustRun('git', ['diff', '--no-ext-diff', '--no-color', baseCommit], { cwd: worktreePath }),
     ]);
     return [`git status --short:\n${status.stdout || '(clean)'}\n`, `git diff ${baseCommit}:\n${diff.stdout || '(no tracked diff)'}\n`].join('\n');
+  }
+
+  async assertRecoverableWorktree(worktreePath, expectedBranch, baseCommit) {
+    const directory = await stat(worktreePath).catch((error) => {
+      if (error.code === 'ENOENT') throw new Error(`Preserved worktree does not exist: ${worktreePath}`);
+      throw error;
+    });
+    if (!directory.isDirectory()) throw new Error(`Preserved worktree is not a directory: ${worktreePath}`);
+
+    const [storedPath, topLevel, targetCommonDir, worktreeCommonDir] = await Promise.all([
+      realpath(worktreePath),
+      mustRun('git', ['rev-parse', '--show-toplevel'], { cwd: worktreePath }),
+      mustRun('git', ['rev-parse', '--git-common-dir'], { cwd: this.targetRepoPath }),
+      mustRun('git', ['rev-parse', '--git-common-dir'], { cwd: worktreePath }),
+    ]);
+    if (await realpath(topLevel.stdout.trim()) !== storedPath) {
+      throw new Error(`Stored worktree path does not match its Git top level: ${worktreePath}`);
+    }
+    const targetCommon = await realpath(path.resolve(this.targetRepoPath, targetCommonDir.stdout.trim()));
+    const worktreeCommon = await realpath(path.resolve(worktreePath, worktreeCommonDir.stdout.trim()));
+    if (targetCommon !== worktreeCommon) throw new Error('Preserved worktree does not belong to the configured target repository');
+
+    const branch = await mustRun('git', ['symbolic-ref', '--quiet', '--short', 'HEAD'], { cwd: worktreePath });
+    if (branch.stdout.trim() !== expectedBranch) {
+      throw new Error(`Preserved worktree branch mismatch: expected ${expectedBranch}, found ${branch.stdout.trim()}`);
+    }
+    const head = (await mustRun('git', ['rev-parse', 'HEAD'], { cwd: worktreePath })).stdout.trim();
+    const branchHead = (await mustRun('git', ['rev-parse', `refs/heads/${expectedBranch}`], { cwd: worktreePath })).stdout.trim();
+    if (head !== branchHead) throw new Error(`Preserved stage branch ${expectedBranch} does not point at worktree HEAD`);
+    const descendant = await runCommand('git', ['merge-base', '--is-ancestor', baseCommit, head], { cwd: worktreePath });
+    if (descendant.exitCode !== 0) throw new Error(`Preserved worktree no longer descends from stored base commit ${baseCommit}`);
+    const status = await mustRun('git', ['status', '--porcelain'], { cwd: worktreePath });
+    if (!status.stdout.trim()) throw new Error('Preserved worktree no longer contains an intended uncommitted diff');
+    return { path: storedPath, branch: expectedBranch, baseCommit, head, status: status.stdout };
   }
 
   async removeWorktree(worktreePath) {

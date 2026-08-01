@@ -140,6 +140,114 @@ test('verifier receives exact authority, policy, stage identity, base, diff, sam
   assert.match(request.prompt, /Base commit: abc123/);
   assert.match(request.prompt, /diff --git a\/a b\/a/);
   assert.match(request.prompt, /code-confirmed, test-confirmed, live-verified, mocked, deferred, and blocked/);
+  assert.match(request.prompt, /Verification phase: PRE-COMMIT/);
+  assert.match(request.prompt, /Do not fail solely because the worktree is dirty/);
+  assert.match(request.prompt, /Current required live verification and a required reproducible migration chain remain genuine blockers/);
+});
+
+test('pre-commit verifier normalizes lifecycle-only dirty, uncommitted, and unpushed findings without waiving genuine blockers', async () => {
+  const stage = { id: 'A', name: 'Stage A', verification: { commands: [], verifier_agent: { enabled: true } } };
+  const loaded = {
+    stages: new Map([['A', stage]]),
+    manifest: { defaults: {
+      agent: { model: 'test', timeout_ms: 1000 },
+      verification: { commands: [], verifier_agent: { enabled: true } },
+    } },
+  };
+  let message = [
+    'LIFECYCLE_PENDING: worktree is intentionally dirty',
+    'LIFECYCLE_PENDING: stage commit and integration push do not exist yet',
+    'VERIFICATION_FAILED',
+  ].join('\n');
+  const provider = { execute: async () => ({ exitCode: 0, lastMessage: message }) };
+  const verification = new VerificationService(loaded, provider, '/tmp/test-logs');
+  const lifecycleOnly = await verification.verify({
+    stageId: 'A', runId: 'run', cwd: process.cwd(), stagePrompt: '# A',
+    executionPolicy: ORCHESTRATOR_EXECUTION_POLICY, baseCommit: 'base', diffContext: 'dirty diff',
+  });
+  assert.equal(lifecycleOnly.passed, true);
+  assert.equal(lifecycleOnly.normalizedLifecycleOnlyVerdict, true);
+
+  message = [
+    'LIFECYCLE_PENDING: stage commit does not exist yet',
+    'GENUINE_BLOCKER: required implementation is incomplete',
+    'VERIFICATION_FAILED',
+  ].join('\n');
+  const blocked = await verification.verify({
+    stageId: 'A', runId: 'run-2', cwd: process.cwd(), stagePrompt: '# A',
+    executionPolicy: ORCHESTRATOR_EXECUTION_POLICY, baseCommit: 'base', diffContext: 'dirty diff',
+  });
+  assert.equal(blocked.passed, false);
+  assert.deepEqual(blocked.classifications.genuineBlockers, [
+    'GENUINE_BLOCKER: required implementation is incomplete',
+  ]);
+});
+
+test('failed verification resumes in the exact worktree without rerunning builder, commits only after verification, and awaits approval', async () => {
+  let fixture;
+  fixture = await recoveryFixture({
+    verificationPassed: true,
+    onVerify: async () => {
+      assert.equal(await revParse(fixture.worktree.path, 'HEAD'), fixture.worktree.baseCommit,
+        'the verifier runs before the orchestrator commit');
+      assert.match((await command('git', ['status', '--porcelain'], fixture.worktree.path)).stdout, /A\.txt/,
+        'the verifier sees the intended dirty worktree');
+      assert.equal((await bareCommand(fixture.remote, ['show-ref', '--verify', '--quiet', `refs/heads/${fixture.integration}`])).exitCode, 1,
+        'nothing has been pushed before approval');
+    },
+  });
+  const originalAgent = structuredClone((await fixture.store.read()).runs['failed-run'].agent);
+  const result = await fixture.execution.resumeRun('failed-run', 'verification', 'recovery-operator');
+
+  assert.equal(result.status, 'awaiting_approval');
+  assert.equal(fixture.provider.builderCalls, 0);
+  assert.equal(fixture.verification.calls, 1);
+  assert.equal(result.worktreePath, fixture.worktree.path);
+  assert.equal(result.branch, fixture.worktree.branch);
+  assert.deepEqual(result.agent, originalAgent);
+  assert.ok(result.resultCommit);
+  assert.notEqual(result.resultCommit, fixture.worktree.baseCommit);
+  assert.equal(await revParse(fixture.worktree.path, 'HEAD'), result.resultCommit);
+  assert.equal(result.lifecycleGates.preCommitVerification.status, 'passed');
+  assert.equal(result.lifecycleGates.orchestratorCommit.status, 'passed');
+  assert.equal(result.lifecycleGates.humanApproval.status, 'pending');
+  assert.equal(result.lifecycleGates.postApprovalIntegration.status, 'pending');
+  assert.equal(result.recoveryAttempts.length, 1);
+  assert.equal(result.recoveryAttempts[0].status, 'passed');
+  assert.equal(result.verificationRecords.length, 2);
+  assert.equal((await bareCommand(fixture.remote, ['show-ref', '--verify', '--quiet', `refs/heads/${fixture.worktree.branch}`])).exitCode, 1,
+    'the stage branch is never pushed');
+
+  const remoteMainBefore = await bareRevParse(fixture.remote, 'refs/heads/main');
+  await fixture.execution.approve('failed-run', 'reviewer', 'recovery approved');
+  assert.equal(await bareRevParse(fixture.remote, `refs/heads/${fixture.integration}`), result.resultCommit);
+  assert.equal(await bareRevParse(fixture.remote, 'refs/heads/main'), remoteMainBefore);
+  assert.equal((await bareCommand(fixture.remote, ['show-ref', '--verify', '--quiet', `refs/heads/${fixture.worktree.branch}`])).exitCode, 1);
+});
+
+test('failed recovery preserves the worktree, branch, builder evidence, and prior verification evidence', async () => {
+  const fixture = await recoveryFixture({ verificationPassed: false });
+  const before = (await fixture.store.read()).runs['failed-run'];
+  const result = await fixture.execution.resumeRun('failed-run', 'verification', 'recovery-operator');
+
+  assert.equal(result.status, 'failed');
+  assert.equal(fixture.provider.builderCalls, 0);
+  assert.equal(fixture.verification.calls, 1);
+  assert.equal(result.worktreePath, fixture.worktree.path);
+  assert.equal(result.branch, fixture.worktree.branch);
+  assert.deepEqual(result.agent, before.agent);
+  assert.equal(result.verificationRecords[0].passed, before.verification.passed);
+  assert.equal(result.verificationRecords[0].verifierSummary, before.verification.verifierSummary);
+  assert.equal(result.verificationRecords.length, 2);
+  assert.equal(result.recoveryAttempts[0].status, 'failed');
+  assert.equal(result.recoveryAttempts[0].phase, 'verification');
+  assert.match(result.error, /verification failed/);
+  assert.equal(await revParse(fixture.worktree.path, 'HEAD'), fixture.worktree.baseCommit,
+    'a failed verifier cannot cause a commit');
+  assert.match((await command('git', ['status', '--porcelain'], fixture.worktree.path)).stdout, /A\.txt/,
+    'the intended diff remains recoverable');
+  assert.equal((await bareCommand(fixture.remote, ['show-ref', '--verify', '--quiet', `refs/heads/${fixture.integration}`])).exitCode, 1);
+  assert.equal(await bareRevParse(fixture.remote, 'refs/heads/main'), fixture.worktree.baseCommit);
 });
 
 test('approval alone advances and pushes only the configured integration branch', async () => {
@@ -232,6 +340,65 @@ async function approvalFixture() {
   const provider = { name: 'mock' };
   const execution = new ExecutionService(loaded, store, programme, git, provider, {}, path.join(root, 'runs'));
   return { root, remote, target, git, execution, resultCommit };
+}
+
+async function recoveryFixture(options = {}) {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cpo-recovery-'));
+  const remote = path.join(root, 'remote.git');
+  const seed = path.join(root, 'seed');
+  const target = path.join(root, 'target');
+  await must('git', ['init', '--bare', remote], root);
+  await mkdir(seed);
+  await must('git', ['init', '-b', 'main'], seed);
+  await configureIdentity(seed);
+  await writeFile(path.join(seed, 'README.md'), '# Target\n');
+  await must('git', ['add', 'README.md'], seed);
+  await must('git', ['commit', '-m', 'initial'], seed);
+  await must('git', ['remote', 'add', 'origin', remote], seed);
+  await must('git', ['push', '-u', 'origin', 'main'], seed);
+  await must('git', ['symbolic-ref', 'HEAD', 'refs/heads/main'], remote);
+  await must('git', ['clone', remote, target], root);
+  await configureIdentity(target);
+
+  const integration = 'programme/cockpit-complete-build';
+  const manifestPath = await writeManifest(root, { integrationBranch: integration, pushIntegration: true });
+  const loaded = await loadManifest(manifestPath);
+  const store = new JsonStateStore(path.join(root, 'state.json'), path.join(root, 'events.jsonl'));
+  const programme = new ProgrammeService(loaded, store);
+  await programme.initialise();
+  const git = new GitService(target, path.join(root, 'worktrees'), 'origin', integration);
+  const worktree = await git.createWorktree('A', 'failed-run', 'main', integration, 'orchestrator');
+  await writeFile(path.join(worktree.path, 'A.txt'), 'preserved intended change\n');
+  const priorVerification = { attemptId: 'initial', recordedAt: '2026-01-01T00:00:00.000Z', passed: false,
+    verifierSummary: 'GENUINE_BLOCKER: old verifier incorrectly required a commit\nVERIFICATION_FAILED' };
+  await store.update('test.failed-run', (state) => {
+    state.stages.A.status = 'failed';
+    state.stages.A.activeRunId = 'failed-run';
+    state.runs['failed-run'] = {
+      id: 'failed-run', stageId: 'A', status: 'failed', requestedBy: 'original-operator',
+      worktreePath: worktree.path, branch: worktree.branch, baseCommit: worktree.baseCommit,
+      agent: { provider: 'mock', exitCode: 0, eventLogPath: '/preserved/builder.jsonl' },
+      metadata: { provider: 'mock', model: 'test-model' },
+      verification: priorVerification,
+      error: 'Stage verification failed', finishedAt: '2026-01-01T00:01:00.000Z',
+    };
+  });
+  const provider = {
+    name: 'mock', builderCalls: 0,
+    async execute() { this.builderCalls += 1; throw new Error('resume must not invoke builder'); },
+  };
+  const verification = {
+    calls: 0,
+    async verify() {
+      this.calls += 1;
+      await options.onVerify?.();
+      return options.verificationPassed
+        ? { passed: true, deterministic: [{ exitCode: 0 }], verifierSummary: 'VERIFICATION_PASSED' }
+        : { passed: false, deterministic: [{ exitCode: 0 }], verifierSummary: 'GENUINE_BLOCKER: live evidence is missing\nVERIFICATION_FAILED' };
+    },
+  };
+  const execution = new ExecutionService(loaded, store, programme, git, provider, verification, path.join(root, 'runs'));
+  return { root, remote, target, integration, loaded, store, programme, git, worktree, provider, verification, execution };
 }
 
 async function writeManifest(root, options = {}) {

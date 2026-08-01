@@ -7,7 +7,7 @@ const allowed = {
   awaiting_approval: new Set(['completed', 'failed', 'cancelled']),
   completed: new Set(),
   blocked: new Set(['ready', 'cancelled']),
-  failed: new Set(['ready', 'queued', 'cancelled']),
+  failed: new Set(['ready', 'queued', 'verifying', 'cancelled']),
   cancelled: new Set(['ready', 'queued']),
 };
 

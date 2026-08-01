@@ -117,6 +117,7 @@ export class ExecutionService {
           branch: worktree.branch,
           worktreePath: worktree.path,
           baseCommit: worktree.baseCommit,
+          lifecycleGates: initialLifecycleGates(stage),
         });
         delete run.claimLeaseExpiresAt;
         transitionStage(state, stage.id, 'running', {
@@ -143,6 +144,8 @@ export class ExecutionService {
       await this.store.update('stage.verifying', (state) => {
         const run = requiredRun(state, runId);
         Object.assign(run, { status: 'verifying', agent });
+        run.lifecycleGates.implementation = gate('passed', 'Builder completed and left the intended worktree changes for verification.');
+        run.lifecycleGates.preCommitVerification = gate('in_progress', 'Deterministic checks and independent read-only verification are running.');
         transitionStage(state, stage.id, 'verifying');
       }, { runId, stageId: stage.id });
 
@@ -158,7 +161,12 @@ export class ExecutionService {
         diffContext,
       });
       await this.store.update('stage.verification-result', (state) => {
-        requiredRun(state, runId).verification = verification;
+        const run = requiredRun(state, runId);
+        appendVerificationRecord(run, verification, 'initial');
+        run.lifecycleGates.preCommitVerification = gate(
+          verification.passed ? 'passed' : 'failed',
+          verification.passed ? 'Pre-commit verification passed.' : 'Pre-commit verification found a genuine blocker.',
+        );
       }, { runId, stageId: stage.id, passed: verification.passed });
       if (!verification.passed) throw new Error('Stage verification failed');
 
@@ -169,13 +177,29 @@ export class ExecutionService {
       if (!resultCommit && !stage.allow_no_changes) {
         throw new Error(`Stage ${stage.id} produced no commit; set allow_no_changes only for an intentional no-op stage`);
       }
+      await this.store.update('stage.commit-created', (state) => {
+        const run = requiredRun(state, runId);
+        if (resultCommit) run.resultCommit = resultCommit;
+        run.lifecycleGates.orchestratorCommit = resultCommit
+          ? gate('passed', `Orchestrator created stage commit ${resultCommit}.`)
+          : gate('not_required', 'Stage is an allowed no-op.');
+      }, { runId, stageId: stage.id, resultCommit });
       if (!stage.requires_human_approval && resultCommit) {
         await this.git.advanceIntegrationBranch(gitDefaults.integration_branch, resultCommit);
+        if (gitDefaults.push_integration_branch) {
+          await this.git.pushIntegrationBranch(gitDefaults.integration_branch, gitDefaults.base_branch);
+        }
       }
 
       const finalStatus = stage.requires_human_approval ? 'awaiting_approval' : 'completed';
       const finalRun = await this.store.update('stage.executed', (state) => {
         const run = requiredRun(state, runId);
+        run.lifecycleGates.humanApproval = stage.requires_human_approval
+          ? gate('pending', 'Awaiting human approval.')
+          : gate('not_required', 'This stage does not require human approval.');
+        run.lifecycleGates.postApprovalIntegration = finalStatus === 'completed'
+          ? gate('passed', 'Integration branch advanced after all required gates; configured integration push completed when enabled.')
+          : gate('pending', 'Integration movement and push are blocked until human approval.');
         Object.assign(run, {
           status: finalStatus,
           finishedAt: nowIso(),
@@ -201,10 +225,178 @@ export class ExecutionService {
         const status = controller.signal.aborted ? 'cancelled' : 'failed';
         state.queue = state.queue.filter((id) => id !== runId);
         Object.assign(run, { status, error: message, finishedAt: nowIso() });
+        if (run.lifecycleGates?.preCommitVerification?.status === 'in_progress') {
+          run.lifecycleGates.preCommitVerification = gate('failed', message);
+        } else if (run.lifecycleGates?.preCommitVerification?.status === 'passed'
+          && run.lifecycleGates?.orchestratorCommit?.status === 'pending') {
+          run.lifecycleGates.orchestratorCommit = gate('failed', message);
+        } else if (run.lifecycleGates?.orchestratorCommit?.status === 'passed'
+          && run.lifecycleGates?.postApprovalIntegration?.status === 'pending') {
+          run.lifecycleGates.postApprovalIntegration = gate('failed', message);
+        }
         delete run.claimLeaseExpiresAt;
         transitionStage(state, run.stageId, status, { lastError: message });
         return structuredClone(run);
       }, { runId, stageId: existing.stageId, error: message });
+    } finally {
+      this.#controllers.delete(runId);
+    }
+  }
+
+  async resumeRun(runId, from, requestedBy) {
+    if (from !== 'verification') throw new Error('resume-run currently requires --from verification');
+    if (!requestedBy) throw new Error('resume-run requires --by <actor>');
+    const snapshot = await this.store.read();
+    const failed = requiredRun(snapshot, runId);
+    if (failed.status !== 'failed') throw new Error(`Run ${runId} is not failed`);
+    if (!failed.worktreePath || !failed.branch || !failed.baseCommit) {
+      throw new Error(`Run ${runId} has no preserved worktree, stage branch, or base commit`);
+    }
+    if (failed.resultCommit) throw new Error(`Run ${runId} already has a stage commit and cannot resume from pre-commit verification`);
+    if (!failed.agent || failed.agent.exitCode !== 0) {
+      throw new Error(`Run ${runId} has no successful builder evidence to preserve`);
+    }
+    if (this.#controllers.has(runId)) throw new Error(`Run ${runId} still has an active builder or verifier process`);
+    const conflicting = Object.values(snapshot.runs).find((candidate) => candidate.id !== runId
+      && ACTIVE_RUN_STATUSES.has(candidate.status)
+      && (candidate.worktreePath === failed.worktreePath || candidate.branch === failed.branch));
+    if (conflicting) throw new Error(`Run ${conflicting.id} is active on the preserved worktree or stage branch`);
+    const stage = this.loaded.stages.get(failed.stageId);
+    if (!stage) throw new Error(`Unknown stage: ${failed.stageId}`);
+
+    const controller = new AbortController();
+    this.#controllers.set(runId, controller);
+    const attemptId = `recovery-${(failed.recoveryAttempts?.length ?? 0) + 1}`;
+    let attemptStarted = false;
+    let recoveryPhase = 'safety';
+    try {
+      await this.store.update('stage.recovery-start', (state) => {
+        const run = requiredRun(state, runId);
+        if (run.status !== 'failed') throw new Error(`Run ${runId} is no longer failed`);
+        const attempt = {
+          id: attemptId,
+          from: 'verification',
+          requestedBy,
+          startedAt: nowIso(),
+          status: 'running',
+          priorError: run.error ?? null,
+          priorFinishedAt: run.finishedAt ?? null,
+          worktreePath: run.worktreePath,
+          branch: run.branch,
+        };
+        run.recoveryAttempts ??= [];
+        run.recoveryAttempts.push(attempt);
+        run.status = 'verifying';
+        run.lifecycleGates ??= initialLifecycleGates(stage);
+        run.lifecycleGates.implementation = gate('passed', 'Earlier successful builder output is preserved; the builder was not rerun.');
+        run.lifecycleGates.preCommitVerification = gate('in_progress', 'Recovery is rerunning deterministic and independent pre-commit verification.');
+        run.lifecycleGates.orchestratorCommit = gate('pending', 'Commit remains blocked until recovery verification passes.');
+        run.lifecycleGates.humanApproval = stage.requires_human_approval
+          ? gate('pending', 'Human approval follows the orchestrator commit.')
+          : gate('not_required', 'This stage does not require human approval.');
+        run.lifecycleGates.postApprovalIntegration = gate('pending', 'Integration movement and push remain blocked.');
+        transitionStage(state, stage.id, 'verifying');
+      }, { runId, stageId: stage.id, attemptId, requestedBy, from });
+      attemptStarted = true;
+
+      const safety = await this.git.assertRecoverableWorktree(failed.worktreePath, failed.branch, failed.baseCommit);
+      await this.store.update('stage.recovery-safety', (state) => {
+        const attempt = currentRecoveryAttempt(requiredRun(state, runId), attemptId);
+        attempt.safety = { passed: true, checkedAt: nowIso(), ...safety };
+      }, { runId, attemptId, branch: failed.branch, worktreePath: failed.worktreePath });
+
+      recoveryPhase = 'verification';
+      const stagePrompt = await readFile(this.programme.resolvePromptPath(stage.id), 'utf8');
+      const diffContext = await this.git.diffContext(failed.worktreePath, failed.baseCommit);
+      const verification = await this.verification.verify({
+        stageId: stage.id,
+        runId: `${runId}-${attemptId}`,
+        cwd: failed.worktreePath,
+        signal: controller.signal,
+        stagePrompt,
+        executionPolicy: ORCHESTRATOR_EXECUTION_POLICY,
+        baseCommit: failed.baseCommit,
+        diffContext,
+      });
+      await this.store.update('stage.recovery-verification-result', (state) => {
+        const run = requiredRun(state, runId);
+        appendVerificationRecord(run, verification, attemptId);
+        const attempt = currentRecoveryAttempt(run, attemptId);
+        attempt.verificationRecordIndex = run.verificationRecords.length - 1;
+        run.lifecycleGates.preCommitVerification = gate(
+          verification.passed ? 'passed' : 'failed',
+          verification.passed ? 'Recovery pre-commit verification passed.' : 'Recovery verification found a genuine blocker.',
+        );
+      }, { runId, stageId: stage.id, attemptId, passed: verification.passed });
+      if (!verification.passed) throw new Error('Stage recovery verification failed');
+
+      recoveryPhase = 'commit';
+      const gitDefaults = this.loaded.manifest.defaults.git;
+      let resultCommit;
+      if (gitDefaults.auto_commit) {
+        resultCommit = await this.git.commitAll(failed.worktreePath, `build(${stage.id}): complete programme stage`);
+      }
+      if (!resultCommit && !stage.allow_no_changes) {
+        throw new Error(`Stage ${stage.id} produced no commit; set allow_no_changes only for an intentional no-op stage`);
+      }
+      await this.store.update('stage.recovery-commit-created', (state) => {
+        const run = requiredRun(state, runId);
+        const attempt = currentRecoveryAttempt(run, attemptId);
+        if (resultCommit) run.resultCommit = resultCommit;
+        attempt.resultCommit = resultCommit ?? null;
+        run.lifecycleGates.orchestratorCommit = resultCommit
+          ? gate('passed', `Orchestrator created stage commit ${resultCommit} after verification passed.`)
+          : gate('not_required', 'Stage is an allowed no-op.');
+      }, { runId, stageId: stage.id, attemptId, resultCommit });
+
+      recoveryPhase = 'integration';
+      if (!stage.requires_human_approval && resultCommit) {
+        await this.git.advanceIntegrationBranch(gitDefaults.integration_branch, resultCommit);
+        if (gitDefaults.push_integration_branch) {
+          await this.git.pushIntegrationBranch(gitDefaults.integration_branch, gitDefaults.base_branch);
+        }
+      }
+      const finalStatus = stage.requires_human_approval ? 'awaiting_approval' : 'completed';
+      const recovered = await this.store.update('stage.recovery-complete', (state) => {
+        const run = requiredRun(state, runId);
+        const attempt = currentRecoveryAttempt(run, attemptId);
+        Object.assign(attempt, { status: 'passed', finishedAt: nowIso(), resultCommit: resultCommit ?? null });
+        run.lifecycleGates.humanApproval = stage.requires_human_approval
+          ? gate('pending', 'Awaiting human approval.')
+          : gate('not_required', 'This stage does not require human approval.');
+        run.lifecycleGates.postApprovalIntegration = finalStatus === 'completed'
+          ? gate('passed', 'Integration branch advanced and configured integration push completed when enabled.')
+          : gate('pending', 'Integration movement and push are blocked until human approval.');
+        Object.assign(run, {
+          status: finalStatus,
+          finishedAt: nowIso(),
+          ...(resultCommit ? { resultCommit } : {}),
+        });
+        delete run.error;
+        transitionStage(state, stage.id, finalStatus, {
+          ...(finalStatus === 'completed' ? { completedRunId: runId } : {}),
+        });
+        return structuredClone(run);
+      }, { runId, stageId: stage.id, attemptId, finalStatus, resultCommit });
+      if (finalStatus === 'completed') {
+        await this.store.update('programme.recompute', (state) => this.programme.recomputeReadiness(state));
+        if (gitDefaults.cleanup_worktree_on_success) await this.git.removeWorktree(failed.worktreePath);
+      }
+      return recovered;
+    } catch (error) {
+      if (!attemptStarted) throw error;
+      const message = error instanceof Error ? error.message : String(error);
+      return this.store.update('stage.recovery-failed', (state) => {
+        const run = requiredRun(state, runId);
+        const attempt = currentRecoveryAttempt(run, attemptId);
+        Object.assign(attempt, { status: 'failed', phase: recoveryPhase, error: message, finishedAt: nowIso() });
+        Object.assign(run, { status: 'failed', error: message, finishedAt: nowIso() });
+        if (recoveryPhase === 'commit') run.lifecycleGates.orchestratorCommit = gate('failed', message);
+        else if (recoveryPhase === 'integration') run.lifecycleGates.postApprovalIntegration = gate('failed', message);
+        else run.lifecycleGates.preCommitVerification = gate('failed', message);
+        transitionStage(state, stage.id, 'failed', { lastError: message });
+        return structuredClone(run);
+      }, { runId, stageId: stage.id, attemptId, phase: recoveryPhase, error: message });
     } finally {
       this.#controllers.delete(runId);
     }
@@ -235,6 +427,9 @@ export class ExecutionService {
           ...(note ? { note } : {}),
         },
       });
+      target.lifecycleGates ??= initialLifecycleGates(stage);
+      target.lifecycleGates.humanApproval = gate('passed', `Approved by ${decidedBy}.`);
+      target.lifecycleGates.postApprovalIntegration = gate('passed', 'Approved integration branch advanced and configured push completed.');
       transitionStage(state, target.stageId, 'completed', { completedRunId: runId });
       return structuredClone(target);
     }, { runId, stageId: pending.stageId, decidedBy, decision: 'approved' });
@@ -425,4 +620,41 @@ function requiredRun(state, runId) {
   const run = state.runs[runId];
   if (!run) throw new Error(`Unknown run: ${runId}`);
   return run;
+}
+
+function initialLifecycleGates(stage) {
+  return {
+    implementation: gate('in_progress', 'Builder implementation is in progress.'),
+    preCommitVerification: gate('pending', 'Runs after the builder leaves its intended changes uncommitted.'),
+    orchestratorCommit: gate('pending', 'Runs only after pre-commit verification passes.'),
+    humanApproval: stage.requires_human_approval
+      ? gate('pending', 'Runs only after the orchestrator commit.')
+      : gate('not_required', 'This stage does not require human approval.'),
+    postApprovalIntegration: gate('pending', 'Integration movement and push run only after all earlier gates.'),
+  };
+}
+
+function gate(status, detail) {
+  return { status, detail, updatedAt: nowIso() };
+}
+
+function appendVerificationRecord(run, verification, attemptId) {
+  if (!run.verificationRecords) {
+    run.verificationRecords = [];
+    if (run.verification) {
+      run.verificationRecords.push({
+        attemptId: 'initial',
+        recordedAt: run.finishedAt ?? nowIso(),
+        ...run.verification,
+      });
+    }
+  }
+  run.verification = verification;
+  run.verificationRecords.push({ attemptId, recordedAt: nowIso(), ...verification });
+}
+
+function currentRecoveryAttempt(run, attemptId) {
+  const attempt = run.recoveryAttempts?.find((candidate) => candidate.id === attemptId);
+  if (!attempt) throw new Error(`Missing recovery attempt ${attemptId}`);
+  return attempt;
 }
