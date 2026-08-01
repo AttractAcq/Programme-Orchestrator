@@ -1,12 +1,21 @@
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { runCommand } from '../utils/process.js';
 
 export class GitService {
-  constructor(targetRepoPath, worktreeRoot, remote = 'origin') {
+  constructor(targetRepoPath, worktreeRoot, remote = 'origin', allowedPushBranch) {
     this.targetRepoPath = targetRepoPath;
     this.worktreeRoot = worktreeRoot;
     this.remote = remote;
+    this.allowedPushBranch = allowedPushBranch;
+  }
+
+  async assertPathExists() {
+    const target = await stat(this.targetRepoPath).catch((error) => {
+      if (error.code === 'ENOENT') throw new Error(`TARGET_REPO_PATH does not exist: ${this.targetRepoPath}`);
+      throw error;
+    });
+    if (!target.isDirectory()) throw new Error(`TARGET_REPO_PATH is not a directory: ${this.targetRepoPath}`);
   }
 
   async assertRepository() {
@@ -31,11 +40,33 @@ export class GitService {
     await mustRun('git', ['fetch', this.remote, '--prune'], { cwd: this.targetRepoPath });
   }
 
+  async resolveBaseBranch(baseBranch) {
+    for (const ref of [`refs/heads/${baseBranch}`, `refs/remotes/${this.remote}/${baseBranch}`]) {
+      const result = await runCommand('git', ['rev-parse', '--verify', `${ref}^{commit}`], { cwd: this.targetRepoPath });
+      if (result.exitCode === 0) return { ref, commit: result.stdout.trim() };
+    }
+    throw new Error(`Configured base branch cannot be resolved: ${baseBranch}`);
+  }
+
+  async inspectIntegrationBranch(baseBranch, integrationBranch) {
+    const validName = await runCommand('git', ['check-ref-format', '--branch', integrationBranch], { cwd: this.targetRepoPath });
+    if (validName.exitCode !== 0) throw new Error(`Invalid integration branch name: ${integrationBranch}`);
+    for (const ref of [`refs/heads/${integrationBranch}`, `refs/remotes/${this.remote}/${integrationBranch}`]) {
+      const result = await runCommand('git', ['rev-parse', '--verify', `${ref}^{commit}`], { cwd: this.targetRepoPath });
+      if (result.exitCode === 0) {
+        return { ref, commit: result.stdout.trim(), wouldCreate: !ref.startsWith('refs/heads/') };
+      }
+    }
+    const base = await this.resolveBaseBranch(baseBranch);
+    return { ref: base.ref, commit: base.commit, wouldCreate: true };
+  }
+
   async ensureIntegrationBranch(baseBranch, integrationBranch) {
     const localRef = `refs/heads/${integrationBranch}`;
     const exists = await runCommand('git', ['show-ref', '--verify', '--quiet', localRef], { cwd: this.targetRepoPath });
     if (exists.exitCode !== 0) {
-      await mustRun('git', ['branch', integrationBranch, `${this.remote}/${baseBranch}`], { cwd: this.targetRepoPath });
+      const resolution = await this.inspectIntegrationBranch(baseBranch, integrationBranch);
+      await mustRun('git', ['branch', integrationBranch, resolution.ref], { cwd: this.targetRepoPath });
     }
     return (await mustRun('git', ['rev-parse', integrationBranch], { cwd: this.targetRepoPath })).stdout.trim();
   }
@@ -68,12 +99,23 @@ export class GitService {
     await mustRun('git', ['update-ref', `refs/heads/${integrationBranch}`, commit, current], { cwd: this.targetRepoPath });
   }
 
-  async pushBranch(worktreePath, branch) {
-    await mustRun('git', ['push', '-u', this.remote, branch], { cwd: worktreePath });
+  async pushIntegrationBranch(integrationBranch, baseBranch = 'main') {
+    if (!this.allowedPushBranch || integrationBranch !== this.allowedPushBranch) {
+      throw new Error(`Refusing to push unapproved branch: ${integrationBranch}`);
+    }
+    if (integrationBranch === baseBranch || integrationBranch === 'main') {
+      throw new Error(`Refusing to push protected base branch: ${integrationBranch}`);
+    }
+    await mustRun('git', ['push', this.remote,
+      `refs/heads/${integrationBranch}:refs/heads/${integrationBranch}`], { cwd: this.targetRepoPath });
   }
 
-  async pushIntegrationBranch(integrationBranch) {
-    await mustRun('git', ['push', this.remote, `${integrationBranch}:${integrationBranch}`], { cwd: this.targetRepoPath });
+  async diffContext(worktreePath, baseCommit) {
+    const [status, diff] = await Promise.all([
+      mustRun('git', ['status', '--short'], { cwd: worktreePath }),
+      mustRun('git', ['diff', '--no-ext-diff', '--no-color', baseCommit], { cwd: worktreePath }),
+    ]);
+    return [`git status --short:\n${status.stdout || '(clean)'}\n`, `git diff ${baseCommit}:\n${diff.stdout || '(no tracked diff)'}\n`].join('\n');
   }
 
   async removeWorktree(worktreePath) {

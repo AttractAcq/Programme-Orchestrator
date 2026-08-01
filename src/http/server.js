@@ -42,7 +42,9 @@ export function buildServer(deps) {
       if (request.method === 'POST' && url.pathname === '/api/programme/run-next') {
         const stageId = await deps.programme.nextReadyStageId();
         if (!stageId) return send(response, 409, { error: 'no-ready-stage' });
-        return send(response, 202, await deps.execution.enqueue(stageId, body.requestedBy ?? 'api', body.dryRun ?? false));
+        return send(response, 202, await deps.execution.enqueue(stageId, body.requestedBy ?? 'api', body.dryRun ?? false, {
+          agentCheck: body.agentCheck ?? false,
+        }));
       }
 
       match = url.pathname.match(/^\/api\/stages\/([^/]+)\/run$/);
@@ -51,6 +53,7 @@ export function buildServer(deps) {
           decodeURIComponent(match[1]),
           body.requestedBy ?? 'api',
           body.dryRun ?? false,
+          { agentCheck: body.agentCheck ?? false },
         ));
       }
       match = url.pathname.match(/^\/api\/runs\/([^/]+)\/(cancel|approve|reject)$/);

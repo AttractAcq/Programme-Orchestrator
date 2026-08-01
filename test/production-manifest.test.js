@@ -27,3 +27,11 @@ test('phase boundaries enforce the complete previous phase', async () => {
   assert.equal(firstAi.effectiveDependsOn.length, 7);
   assert.ok(firstAi.effectiveDependsOn.includes('2A-G'));
 });
+
+test('production Git policy pushes approved integration work but never stage branches', async () => {
+  const loaded = await loadManifest(path.join(root, 'config', 'BUILD_SEQUENCE.json'));
+  assert.equal(loaded.manifest.defaults.git.auto_push, false);
+  assert.equal(loaded.manifest.defaults.git.push_integration_branch, true);
+  assert.equal(loaded.manifest.defaults.git.base_branch, 'main');
+  assert.equal(loaded.manifest.defaults.git.integration_branch, 'programme/cockpit-complete-build');
+});

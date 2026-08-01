@@ -22,7 +22,7 @@
       "integration_branch": "programme/cockpit-complete-build",
       "auto_commit": true,
       "auto_push": false,
-      "push_integration_branch": false,
+      "push_integration_branch": true,
       "cleanup_worktree_on_success": false
     },
     "agent": {

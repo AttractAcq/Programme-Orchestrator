@@ -1,6 +1,9 @@
-import { mkdir, readFile } from 'node:fs/promises';
+import { access, mkdir, readFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { assertStageTransition } from '../domain/state-machine.js';
+import { buildBuilderPrompt, ORCHESTRATOR_EXECUTION_POLICY } from './execution-policy.js';
+import { resolveExecutable } from '../utils/process.js';
 import { nowIso } from '../utils/time.js';
 
 const ACTIVE_RUN_STATUSES = new Set(['claimed', 'running', 'verifying', 'awaiting_approval']);
@@ -12,16 +15,26 @@ export class ExecutionService {
     Object.assign(this, { loaded, store, programme, git, agentProvider, verification, logDir });
   }
 
-  async enqueue(stageId, requestedBy, dryRun = false) {
+  async enqueue(stageId, requestedBy, dryRun = false, options = {}) {
     const stage = this.loaded.stages.get(stageId);
     if (!stage) throw new Error(`Unknown stage: ${stageId}`);
+    if (options.agentCheck && !dryRun) throw new Error('--agent-check is only valid with --dry-run');
+    const agentDefaults = this.loaded.manifest.defaults.agent;
     const run = {
       id: randomUUID(),
       stageId,
       status: 'queued',
       requestedBy,
       dryRun,
+      agentCheck: Boolean(options.agentCheck),
       createdAt: nowIso(),
+      metadata: {
+        provider: this.agentProvider.name,
+        model: agentDefaults.model ?? null,
+        builderSandbox: 'workspace-write',
+        verifierSandbox: 'read-only',
+        timeoutMs: agentDefaults.timeout_ms,
+      },
     };
 
     await this.store.update('stage.enqueue', (state) => {
@@ -38,7 +51,7 @@ export class ExecutionService {
       transitionStage(state, stageId, 'queued', { activeRunId: run.id });
       state.runs[run.id] = run;
       state.queue.push(run.id);
-    }, { stageId, runId: run.id, requestedBy, dryRun });
+    }, { stageId, runId: run.id, requestedBy, dryRun, agentCheck: run.agentCheck });
     return run;
   }
 
@@ -80,6 +93,7 @@ export class ExecutionService {
     let worktree;
 
     try {
+      await this.git.assertPathExists();
       await this.git.assertRepository();
       await this.git.assertRemoteMatches(this.loaded.manifest.programme.target_repository.full_name);
       await this.git.assertClean();
@@ -111,7 +125,8 @@ export class ExecutionService {
         });
       }, { runId, stageId: stage.id, branch: worktree.branch });
 
-      const prompt = await readFile(this.programme.resolvePromptPath(stage.id), 'utf8');
+      const stagePrompt = await readFile(this.programme.resolvePromptPath(stage.id), 'utf8');
+      const prompt = buildBuilderPrompt(stagePrompt);
       const agentDefaults = this.loaded.manifest.defaults.agent;
       const agent = await this.agentProvider.execute({
         prompt,
@@ -131,7 +146,17 @@ export class ExecutionService {
         transitionStage(state, stage.id, 'verifying');
       }, { runId, stageId: stage.id });
 
-      const verification = await this.verification.verify(stage.id, runId, worktree.path, controller.signal);
+      const diffContext = await this.git.diffContext(worktree.path, worktree.baseCommit);
+      const verification = await this.verification.verify({
+        stageId: stage.id,
+        runId,
+        cwd: worktree.path,
+        signal: controller.signal,
+        stagePrompt,
+        executionPolicy: ORCHESTRATOR_EXECUTION_POLICY,
+        baseCommit: worktree.baseCommit,
+        diffContext,
+      });
       await this.store.update('stage.verification-result', (state) => {
         requiredRun(state, runId).verification = verification;
       }, { runId, stageId: stage.id, passed: verification.passed });
@@ -144,11 +169,8 @@ export class ExecutionService {
       if (!resultCommit && !stage.allow_no_changes) {
         throw new Error(`Stage ${stage.id} produced no commit; set allow_no_changes only for an intentional no-op stage`);
       }
-      if (gitDefaults.auto_push && resultCommit) await this.git.pushBranch(worktree.path, worktree.branch);
-
       if (!stage.requires_human_approval && resultCommit) {
         await this.git.advanceIntegrationBranch(gitDefaults.integration_branch, resultCommit);
-        if (gitDefaults.push_integration_branch) await this.git.pushIntegrationBranch(gitDefaults.integration_branch);
       }
 
       const finalStatus = stage.requires_human_approval ? 'awaiting_approval' : 'completed';
@@ -197,7 +219,9 @@ export class ExecutionService {
     const gitDefaults = this.loaded.manifest.defaults.git;
     if (pending.resultCommit) {
       await this.git.advanceIntegrationBranch(gitDefaults.integration_branch, pending.resultCommit);
-      if (gitDefaults.push_integration_branch) await this.git.pushIntegrationBranch(gitDefaults.integration_branch);
+      if (gitDefaults.push_integration_branch) {
+        await this.git.pushIntegrationBranch(gitDefaults.integration_branch, gitDefaults.base_branch);
+      }
     }
 
     const run = await this.store.update('stage.approve', (state) => {
@@ -242,25 +266,37 @@ export class ExecutionService {
   }
 
   async cancel(runId) {
-    this.#controllers.get(runId)?.abort();
-    await this.store.update('stage.cancel.requested', (state) => {
+    const controller = this.#controllers.get(runId);
+    controller?.abort();
+    return this.store.update('stage.cancel.requested', (state) => {
       const run = requiredRun(state, runId);
       if (['queued', 'claimed'].includes(run.status)) {
         state.queue = state.queue.filter((id) => id !== runId);
         Object.assign(run, { status: 'cancelled', finishedAt: nowIso() });
         delete run.claimLeaseExpiresAt;
         transitionStage(state, run.stageId, 'cancelled');
+      } else if (!controller && ['running', 'verifying', 'awaiting_approval'].includes(run.status)) {
+        Object.assign(run, {
+          status: 'cancelled',
+          error: 'Cancelled during interruption recovery',
+          finishedAt: nowIso(),
+        });
+        transitionStage(state, run.stageId, 'cancelled', { lastError: run.error });
       }
+      return structuredClone(run);
     }, { runId });
   }
 
   async completeDryRun(runId, stage) {
+    const preflight = await this.#preflight(runId, stage);
+    const failedChecks = preflight.checks.filter((check) => !check.passed);
     return this.store.update('stage.dry-run', (state) => {
       const run = requiredRun(state, runId);
       state.queue = state.queue.filter((id) => id !== runId);
       Object.assign(run, {
-        status: 'completed',
+        status: preflight.passed ? 'completed' : 'failed',
         finishedAt: nowIso(),
+        preflight,
         dryRunPlan: {
           stageId: stage.id,
           phaseId: stage.phaseId,
@@ -272,10 +308,96 @@ export class ExecutionService {
           ],
           requiresHumanApproval: stage.requires_human_approval,
         },
+        ...(!preflight.passed ? {
+          error: `Dry-run preflight failed: ${failedChecks.map((check) => `${check.id}: ${check.error}`).join('; ')}`,
+        } : {}),
       });
-      transitionStage(state, stage.id, 'ready');
+      transitionStage(state, stage.id, 'ready', {
+        ...(!preflight.passed ? { lastError: run.error } : {}),
+      });
+      delete state.stages[stage.id].activeRunId;
+      if (preflight.passed) delete state.stages[stage.id].lastError;
       return structuredClone(run);
-    }, { runId, stageId: stage.id });
+    }, { runId, stageId: stage.id, passed: preflight.passed });
+  }
+
+  async #preflight(runId, stage) {
+    const checks = [];
+    const check = async (id, label, action) => {
+      try {
+        const detail = await action();
+        checks.push({ id, label, passed: true, ...(detail === undefined ? {} : { detail }) });
+      } catch (error) {
+        checks.push({ id, label, passed: false, error: error instanceof Error ? error.message : String(error) });
+      }
+    };
+    const gitDefaults = this.loaded.manifest.defaults.git;
+    const targetRepository = this.loaded.manifest.programme.target_repository;
+    const promptPath = this.programme.resolvePromptPath(stage.id);
+    const commands = [...this.loaded.manifest.defaults.verification.commands, ...stage.verification.commands];
+
+    await check('target_path', 'TARGET_REPO_PATH exists', async () => {
+      await this.git.assertPathExists();
+      return this.git.targetRepoPath;
+    });
+    await check('git_working_tree', 'Target is a Git working tree', async () => {
+      await this.git.assertRepository();
+      return 'Git working tree confirmed';
+    });
+    await check('target_remote', `Remote resolves to ${targetRepository.full_name}`, async () => {
+      await this.git.assertRemoteMatches(targetRepository.full_name);
+      return `${this.git.remote} -> ${targetRepository.full_name}`;
+    });
+    await check('clean_working_tree', 'Target working tree is clean', async () => {
+      await this.git.assertClean();
+      return 'No tracked or untracked changes';
+    });
+    await check('base_branch', `Base branch ${gitDefaults.base_branch} exists`, async () => {
+      return this.git.resolveBaseBranch(gitDefaults.base_branch);
+    });
+    await check('integration_branch', `Integration branch ${gitDefaults.integration_branch} is resolvable or safely creatable`, async () => {
+      return this.git.inspectIntegrationBranch(gitDefaults.base_branch, gitDefaults.integration_branch);
+    });
+    await check('stage_prompt', 'Stage prompt exists and is readable', async () => {
+      await access(promptPath, constants.R_OK);
+      await readFile(promptPath, 'utf8');
+      return promptPath;
+    });
+    for (const [index, command] of commands.entries()) {
+      await check(`verification_executable_${index}`, `Verification executable ${command.command} resolves`, async () => {
+        const resolved = await resolveExecutable(command.command, {
+          cwd: this.git.targetRepoPath,
+          env: { ...process.env, ...(command.env ?? {}) },
+        });
+        if (!resolved) throw new Error(`Executable cannot be resolved: ${command.command}`);
+        return resolved;
+      });
+    }
+    await check('codex_binary', 'Configured Codex binary is resolvable when required', async () => {
+      if (this.agentProvider.name !== 'codex-exec') return 'Not required for the configured mock provider';
+      const resolved = await resolveExecutable(this.agentProvider.binary, { cwd: this.git.targetRepoPath });
+      if (!resolved) throw new Error(`Codex binary cannot be resolved: ${this.agentProvider.binary}`);
+      return resolved;
+    });
+    if ((await this.store.read()).runs[runId]?.agentCheck) {
+      await check('agent_health', 'Explicit non-writing provider health check', async () => {
+        const result = await this.agentProvider.healthCheck({
+          cwd: this.git.targetRepoPath,
+          runId,
+          logDir: this.logDir,
+          model: this.loaded.manifest.defaults.agent.model,
+          timeoutMs: this.loaded.manifest.defaults.agent.timeout_ms,
+        });
+        if (result.exitCode !== 0) throw new Error(`Provider health check exited with code ${result.exitCode}`);
+        return { provider: result.provider, model: this.loaded.manifest.defaults.agent.model ?? null };
+      });
+    }
+    return {
+      passed: checks.every((candidate) => candidate.passed),
+      checkedAt: nowIso(),
+      agentCheckRequested: Boolean((await this.store.read()).runs[runId]?.agentCheck),
+      checks,
+    };
   }
 
   #requeueExpiredClaims(state) {

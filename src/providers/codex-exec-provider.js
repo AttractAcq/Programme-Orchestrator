@@ -1,5 +1,7 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createWriteStream } from 'node:fs';
+import { mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { finished } from 'node:stream/promises';
 import { runCommand } from '../utils/process.js';
 
 export class CodexExecProvider {
@@ -17,17 +19,37 @@ export class CodexExecProvider {
     ];
     if (request.model) args.push('--model', request.model);
     args.push('-');
-    const result = await runCommand(this.binary, args, {
-      cwd: request.cwd,
-      input: request.prompt,
-      timeoutMs: request.timeoutMs,
-      signal: request.signal,
-      env: { NO_COLOR: '1' },
-    });
-    await writeFile(eventLogPath, result.stdout, 'utf8');
-    await writeFile(stderrLogPath, result.stderr, 'utf8');
+    const eventStream = createWriteStream(eventLogPath, { flags: 'w' });
+    const stderrStream = createWriteStream(stderrLogPath, { flags: 'w' });
+    console.error(`[codex] ${request.runId}: started`);
+    let result;
+    let processError;
+    try {
+      result = await runCommand(this.binary, args, {
+        cwd: request.cwd,
+        input: request.prompt,
+        timeoutMs: request.timeoutMs,
+        signal: request.signal,
+        env: { NO_COLOR: '1' },
+        captureStdout: false,
+        captureStderr: false,
+        onStdout: (chunk) => eventStream.write(chunk),
+        onStderr: (chunk) => stderrStream.write(chunk),
+      });
+    } catch (error) {
+      processError = error;
+    } finally {
+      eventStream.end();
+      stderrStream.end();
+      await Promise.allSettled([finished(eventStream), finished(stderrStream)]);
+    }
+    if (processError) {
+      console.error(`[codex] ${request.runId}: failed to start`);
+      throw processError;
+    }
     let lastMessage;
     try { lastMessage = (await readFile(lastMessagePath, 'utf8')).trim(); } catch { lastMessage = undefined; }
+    console.error(`[codex] ${request.runId}: finished with exit code ${result.exitCode}`);
     return {
       provider: this.name,
       exitCode: result.exitCode,
@@ -37,6 +59,16 @@ export class CodexExecProvider {
       ...(lastMessage ? { lastMessage } : {}),
       eventLogPath,
       stderrLogPath,
+      lastMessagePath,
     };
+  }
+
+  async healthCheck(request) {
+    return this.execute({
+      ...request,
+      runId: `${request.runId}-agent-check`,
+      sandbox: 'read-only',
+      prompt: 'Provider health check only. Do not inspect or modify files. Reply with exactly PROVIDER_HEALTHY.',
+    });
   }
 }

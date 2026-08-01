@@ -23,4 +23,17 @@ export class MockAgentProvider {
       stderrLogPath,
     };
   }
+
+
+  async healthCheck(request) {
+    return {
+      provider: this.name,
+      exitCode: 0,
+      startedAt: nowIso(),
+      finishedAt: nowIso(),
+      durationMs: 0,
+      lastMessage: 'PROVIDER_HEALTHY',
+      runId: `${request.runId}-agent-check`,
+    };
+  }
 }

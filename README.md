@@ -48,8 +48,8 @@ Approved source documents are retained, and every executable stage has a standal
 - Independent verifier-agent gate
 - Human approval and rejection
 - Automatic stage commits
-- Opt-in stage and integration-branch pushes
-- Pause, resume, cancellation and dry-run planning
+- Approval-gated integration-branch pushes
+- Cancellation, interruption recovery and non-mutating dry-run preflight
 - HTTP API and CLI
 - Docker and GitHub Actions
 - Zero third-party runtime dependencies
@@ -66,7 +66,7 @@ programme/cockpit-complete-build
 orchestrator/<stage>/<run-id>
 ```
 
-A builder works in an isolated worktree. Deterministic verification and an independent read-only verifier run before the human approval gate. Approval advances only the cumulative integration branch. Remote pushes are disabled by default.
+A builder works in an isolated worktree under an immutable policy that forbids commits, pushes, merges, `main` changes, tags, deployments, and production-data mutation. The orchestrator runs deterministic verification, invokes an independent read-only verifier with the exact stage authority, and creates the stage commit itself. Approval advances and pushes only the cumulative integration branch. No code path pushes `main`.
 
 ## Requirements
 
@@ -87,7 +87,7 @@ npm run validate
 
 Set `TARGET_REPO_PATH` in `.env` to the absolute path of the Cockpit checkout.
 
-## Inspect the full sequence
+## Safe Stage A preflight
 
 ```bash
 node src/cli.js validate
@@ -95,7 +95,13 @@ node src/cli.js status
 node src/cli.js run-stage A --dry-run
 ```
 
-A dry run validates readiness and returns the stage execution plan without creating a target worktree.
+A normal dry run consumes no model usage. It checks the target path, Git working-tree identity, exact `AttractAcq/Cockpit` remote, cleanliness, base and integration refs, prompt readability, deterministic command executables, and the configured provider binary. It returns each check as passed or failed, leaves Stage A `ready`, leaves Stage B `blocked`, and does not fetch, create branches/worktrees, invoke a builder, commit, or push.
+
+To include a minimal read-only provider call, explicitly opt in (this consumes model usage when using `codex-exec`):
+
+```bash
+node --env-file=.env src/cli.js run-stage A --dry-run --agent-check
+```
 
 ## Run with Codex
 
@@ -105,15 +111,18 @@ For a real supervised stage:
 
 ```env
 AGENT_PROVIDER=codex-exec
+CODEX_MODEL=<explicit-model-id>
 ```
 
 Then:
 
 ```bash
-node src/cli.js run-stage A
+node --env-file=.env src/cli.js run-stage A --by alex
 ```
 
-The provider passes the complete standalone prompt through stdin, records Codex JSONL and the final response under `data/runs/`, and works only in the isolated stage worktree.
+`codex-exec` startup fails if the provider name is unsupported, `CODEX_MODEL` is empty, or `CODEX_BIN` cannot be resolved. The same model and timeout are passed to the builder and verifier. The builder sandbox is `workspace-write`; the verifier sandbox is always `read-only`.
+
+The provider streams JSONL to `data/runs/<run-id>.codex.jsonl`, stderr to `data/runs/<run-id>.codex.stderr.log`, and the final response to `data/runs/<run-id>.last-message.txt`. Partial logs survive non-zero exit, timeout, and cancellation. Run metadata records provider, model, both sandboxes, and timeout without recording the full environment.
 
 ## Approval flow
 
@@ -123,7 +132,27 @@ After a successful build and verification, the run pauses in `awaiting_approval`
 node src/cli.js approve <run-id> --by alex --note "Stage exit gate verified"
 ```
 
-Approval fast-forwards the cumulative programme integration branch. Rejection leaves the stage available for a corrected run.
+Approval fast-forwards the local `programme/cockpit-complete-build` branch and, because the production manifest enables `push_integration_branch`, pushes that exact ref to `origin`. Unapproved work is never pushed. `defaults.git.auto_push` remains `false`, stage branches are never pushed, and `main` is never updated or pushed.
+
+## Recovery after interruption
+
+Inspect durable state and the preserved partial logs first:
+
+```bash
+node --env-file=.env src/cli.js status
+ls -la data/runs
+git -C /absolute/path/to/Cockpit worktree list
+```
+
+Queued claims expire and are re-queued automatically. A run interrupted in `running`, `verifying`, or `awaiting_approval` retains its worktree and logs. Mark that stale run cancelled, inspect or archive its worktree, then explicitly rerun its stage:
+
+```bash
+node --env-file=.env src/cli.js cancel <run-id>
+node --env-file=.env src/cli.js run-stage A --dry-run
+node --env-file=.env src/cli.js run-stage A --by alex
+```
+
+If an approval push fails, the run remains `awaiting_approval`; fix remote authentication/connectivity and repeat the same `approve` command. The integration update is fast-forward-only and retry-safe.
 
 ## API and worker
 

@@ -1,4 +1,7 @@
 import { spawn } from 'node:child_process';
+import { access } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import path from 'node:path';
 
 export async function runCommand(command, args = [], options = {}) {
   const startedAt = new Date().toISOString();
@@ -14,8 +17,14 @@ export async function runCommand(command, args = [], options = {}) {
   let stderr = '';
   child.stdout.setEncoding('utf8');
   child.stderr.setEncoding('utf8');
-  child.stdout.on('data', (chunk) => { stdout += chunk; options.onStdout?.(chunk); });
-  child.stderr.on('data', (chunk) => { stderr += chunk; options.onStderr?.(chunk); });
+  child.stdout.on('data', (chunk) => {
+    if (options.captureStdout !== false) stdout += chunk;
+    options.onStdout?.(chunk);
+  });
+  child.stderr.on('data', (chunk) => {
+    if (options.captureStderr !== false) stderr += chunk;
+    options.onStderr?.(chunk);
+  });
 
   if (options.input !== undefined) child.stdin.end(options.input);
   else child.stdin.end();
@@ -27,7 +36,8 @@ export async function runCommand(command, args = [], options = {}) {
   }
 
   const abortHandler = () => child.kill('SIGTERM');
-  options.signal?.addEventListener('abort', abortHandler, { once: true });
+  if (options.signal?.aborted) abortHandler();
+  else options.signal?.addEventListener('abort', abortHandler, { once: true });
 
   const exitCode = await new Promise((resolve, reject) => {
     child.once('error', reject);
@@ -47,4 +57,22 @@ export async function runCommand(command, args = [], options = {}) {
     finishedAt: new Date().toISOString(),
     durationMs: Date.now() - started,
   };
+}
+
+export async function resolveExecutable(command, options = {}) {
+  if (!command || typeof command !== 'string') return undefined;
+  const cwd = options.cwd ?? process.cwd();
+  const env = options.env ?? process.env;
+  const candidates = command.includes('/') || path.isAbsolute(command)
+    ? [path.resolve(cwd, command)]
+    : (env.PATH ?? '').split(path.delimiter).filter(Boolean).map((entry) => path.join(entry, command));
+  for (const candidate of candidates) {
+    try {
+      await access(candidate, constants.X_OK);
+      return candidate;
+    } catch {
+      // Continue searching PATH without invoking a shell.
+    }
+  }
+  return undefined;
 }
