@@ -1,7 +1,7 @@
 import { access, mkdir, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { assertStageTransition } from '../domain/state-machine.js';
+import { assertStageTransition, assertVerificationRecoveryTransition } from '../domain/state-machine.js';
 import { buildBuilderPrompt, ORCHESTRATOR_EXECUTION_POLICY } from './execution-policy.js';
 import { resolveExecutable } from '../utils/process.js';
 import { nowIso } from '../utils/time.js';
@@ -248,7 +248,9 @@ export class ExecutionService {
     if (!requestedBy) throw new Error('resume-run requires --by <actor>');
     const snapshot = await this.store.read();
     const failed = requiredRun(snapshot, runId);
-    if (failed.status !== 'failed') throw new Error(`Run ${runId} is not failed`);
+    const stage = this.loaded.stages.get(failed.stageId);
+    if (!stage) throw new Error(`Unknown stage: ${failed.stageId}`);
+    assertVerificationRecoveryState(snapshot, stage.id, runId);
     if (!failed.worktreePath || !failed.branch || !failed.baseCommit) {
       throw new Error(`Run ${runId} has no preserved worktree, stage branch, or base commit`);
     }
@@ -256,23 +258,43 @@ export class ExecutionService {
     if (!failed.agent || failed.agent.exitCode !== 0) {
       throw new Error(`Run ${runId} has no successful builder evidence to preserve`);
     }
-    if (this.#controllers.has(runId)) throw new Error(`Run ${runId} still has an active builder or verifier process`);
+    const activeControllerRunId = [...this.#controllers.keys()].find((candidateId) => {
+      const candidate = snapshot.runs[candidateId];
+      return candidateId === runId || (candidate
+        && (candidate.worktreePath === failed.worktreePath || candidate.branch === failed.branch));
+    });
+    if (activeControllerRunId) {
+      throw new Error(`Run ${activeControllerRunId} still has an active builder or verifier process on the preserved recovery context`);
+    }
     const conflicting = Object.values(snapshot.runs).find((candidate) => candidate.id !== runId
       && ACTIVE_RUN_STATUSES.has(candidate.status)
       && (candidate.worktreePath === failed.worktreePath || candidate.branch === failed.branch));
     if (conflicting) throw new Error(`Run ${conflicting.id} is active on the preserved worktree or stage branch`);
-    const stage = this.loaded.stages.get(failed.stageId);
-    if (!stage) throw new Error(`Unknown stage: ${failed.stageId}`);
 
     const controller = new AbortController();
     this.#controllers.set(runId, controller);
     const attemptId = `recovery-${(failed.recoveryAttempts?.length ?? 0) + 1}`;
     let attemptStarted = false;
-    let recoveryPhase = 'safety';
+    let recoveryPhase = 'verification';
     try {
+      const safety = await this.git.assertRecoverableWorktree(failed.worktreePath, failed.branch, failed.baseCommit);
+      const stagePrompt = await readFile(this.programme.resolvePromptPath(stage.id), 'utf8');
+      const diffContext = await this.git.diffContext(failed.worktreePath, failed.baseCommit);
+
       await this.store.update('stage.recovery-start', (state) => {
         const run = requiredRun(state, runId);
-        if (run.status !== 'failed') throw new Error(`Run ${runId} is no longer failed`);
+        assertVerificationRecoveryState(state, stage.id, runId, {
+          branch: failed.branch,
+          worktreePath: failed.worktreePath,
+          baseCommit: failed.baseCommit,
+        });
+        const conflictingRun = Object.values(state.runs).find((candidate) => candidate.id !== runId
+          && ACTIVE_RUN_STATUSES.has(candidate.status)
+          && (candidate.worktreePath === run.worktreePath || candidate.branch === run.branch));
+        if (conflictingRun) {
+          throw new Error(`Run ${conflictingRun.id} is active on the preserved worktree or stage branch`);
+        }
+        transitionStageForVerificationRecovery(state, stage.id, runId);
         const attempt = {
           id: attemptId,
           from: 'verification',
@@ -283,6 +305,7 @@ export class ExecutionService {
           priorFinishedAt: run.finishedAt ?? null,
           worktreePath: run.worktreePath,
           branch: run.branch,
+          safety: { passed: true, checkedAt: nowIso(), ...safety },
         };
         run.recoveryAttempts ??= [];
         run.recoveryAttempts.push(attempt);
@@ -295,19 +318,9 @@ export class ExecutionService {
           ? gate('pending', 'Human approval follows the orchestrator commit.')
           : gate('not_required', 'This stage does not require human approval.');
         run.lifecycleGates.postApprovalIntegration = gate('pending', 'Integration movement and push remain blocked.');
-        transitionStage(state, stage.id, 'verifying');
       }, { runId, stageId: stage.id, attemptId, requestedBy, from });
       attemptStarted = true;
 
-      const safety = await this.git.assertRecoverableWorktree(failed.worktreePath, failed.branch, failed.baseCommit);
-      await this.store.update('stage.recovery-safety', (state) => {
-        const attempt = currentRecoveryAttempt(requiredRun(state, runId), attemptId);
-        attempt.safety = { passed: true, checkedAt: nowIso(), ...safety };
-      }, { runId, attemptId, branch: failed.branch, worktreePath: failed.worktreePath });
-
-      recoveryPhase = 'verification';
-      const stagePrompt = await readFile(this.programme.resolvePromptPath(stage.id), 'utf8');
-      const diffContext = await this.git.diffContext(failed.worktreePath, failed.baseCommit);
       const verification = await this.verification.verify({
         stageId: stage.id,
         runId: `${runId}-${attemptId}`,
@@ -614,6 +627,32 @@ function transitionStage(state, stageId, nextStatus, patch = {}) {
   if (!runtime) throw new Error(`Unknown stage runtime: ${stageId}`);
   assertStageTransition(runtime.status, nextStatus);
   Object.assign(runtime, patch, { status: nextStatus, updatedAt: nowIso() });
+}
+
+function transitionStageForVerificationRecovery(state, stageId, runId) {
+  const runtime = state.stages[stageId];
+  if (!runtime) throw new Error(`Unknown stage runtime: ${stageId}`);
+  const run = requiredRun(state, runId);
+  assertVerificationRecoveryTransition(stageId, runtime, runId, run);
+  Object.assign(runtime, { status: 'verifying', updatedAt: nowIso() });
+}
+
+function assertVerificationRecoveryState(state, stageId, runId, expected = undefined) {
+  const runtime = state.stages[stageId];
+  if (!runtime) throw new Error(`Unknown stage runtime: ${stageId}`);
+  const run = requiredRun(state, runId);
+  assertVerificationRecoveryTransition(stageId, runtime, runId, run);
+  if (expected && (run.branch !== expected.branch
+    || run.worktreePath !== expected.worktreePath
+    || run.baseCommit !== expected.baseCommit)) {
+    throw new Error(`Run ${runId} recovery context changed before recovery could start`);
+  }
+  if (run.resultCommit) {
+    throw new Error(`Run ${runId} already has a stage commit and cannot resume from pre-commit verification`);
+  }
+  if (!run.agent || run.agent.exitCode !== 0) {
+    throw new Error(`Run ${runId} has no successful builder evidence to preserve`);
+  }
 }
 
 function requiredRun(state, runId) {

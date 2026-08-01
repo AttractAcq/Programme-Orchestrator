@@ -16,7 +16,7 @@ The Programme Orchestrator backend is hardened for the first supervised Cockpit 
 - Unknown providers, missing Codex models, and unresolved Codex binaries fail startup.
 - Codex JSONL and stderr stream to disk during execution; final messages and partial failure/cancellation logs remain available.
 - Stage branches are never pushed. Human approval alone advances and pushes the configured integration branch; protected `main` is rejected.
-- Failed post-builder runs can resume from verification in the exact preserved worktree/branch without invoking the builder. Recovery appends attempts and verification records and fails closed without cleanup.
+- Failed post-builder runs whose stages have returned to `ready` can resume from verification in the exact preserved worktree/branch without invoking the builder. A recovery-only guarded transition checks the failed run, `activeRunId`, branch, worktree, Git safety, and intended diff before recording an attempt; ordinary ready stages cannot bypass the builder.
 
 ## Approval and integration configuration
 
@@ -36,4 +36,4 @@ git diff --check
 
 ## Operating and recovery boundary
 
-The JSON state backend remains designed for one trusted execution host. Claimed jobs automatically re-queue after lease expiry. Interrupted active runs require operator inspection. A failed run with completed-builder evidence can use `node --env-file=.env src/cli.js resume-run <runId> --from verification --by <actor>` only when its stored worktree, branch, ancestry, and dirty diff pass safety validation and no process/run is active there. Lifecycle-owned commit, approval, integration, push, and final-snapshot work remains pending; live verification, reproducibility, implementation, safety, and evidence findings remain genuine blockers. Approval push failures remain pending so authentication or connectivity can be repaired and approval retried.
+The JSON state backend remains designed for one trusted execution host. Claimed jobs automatically re-queue after lease expiry. Interrupted active runs require operator inspection. A failed run with completed-builder evidence may have a `ready` stage that retains the failed run/worktree. It can use `node --env-file=.env src/cli.js resume-run <runId> --from verification --by <actor>` only through the restricted recovery transition, when the stage/run links, stored worktree, branch, ancestry, and dirty diff pass safety validation and no process/run is active there. Lifecycle-owned commit, approval, integration, push, and final-snapshot work remains pending; live verification, reproducibility, implementation, safety, and evidence findings remain genuine blockers. Approval push failures remain pending so authentication or connectivity can be repaired and approval retried.

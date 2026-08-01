@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { loadManifest } from '../src/manifest/loader.js';
@@ -186,8 +186,12 @@ test('pre-commit verifier normalizes lifecycle-only dirty, uncommitted, and unpu
 test('failed verification resumes in the exact worktree without rerunning builder, commits only after verification, and awaits approval', async () => {
   let fixture;
   fixture = await recoveryFixture({
+    realVerification: true,
     verificationPassed: true,
     onVerify: async () => {
+      const state = await fixture.store.read();
+      assert.equal(state.stages.A.status, 'verifying');
+      assert.equal(state.runs['failed-run'].status, 'verifying');
       assert.equal(await revParse(fixture.worktree.path, 'HEAD'), fixture.worktree.baseCommit,
         'the verifier runs before the orchestrator commit');
       assert.match((await command('git', ['status', '--porcelain'], fixture.worktree.path)).stdout, /A\.txt/,
@@ -197,10 +201,13 @@ test('failed verification resumes in the exact worktree without rerunning builde
     },
   });
   const originalAgent = structuredClone((await fixture.store.read()).runs['failed-run'].agent);
+  const localMainBefore = await revParse(fixture.target, 'main');
+  const remoteMainBefore = await bareRevParse(fixture.remote, 'refs/heads/main');
   const result = await fixture.execution.resumeRun('failed-run', 'verification', 'recovery-operator');
 
   assert.equal(result.status, 'awaiting_approval');
   assert.equal(fixture.provider.builderCalls, 0);
+  assert.equal(fixture.provider.verifierCalls, 1);
   assert.equal(fixture.verification.calls, 1);
   assert.equal(result.worktreePath, fixture.worktree.path);
   assert.equal(result.branch, fixture.worktree.branch);
@@ -215,12 +222,14 @@ test('failed verification resumes in the exact worktree without rerunning builde
   assert.equal(result.recoveryAttempts.length, 1);
   assert.equal(result.recoveryAttempts[0].status, 'passed');
   assert.equal(result.verificationRecords.length, 2);
+  assert.equal(result.verificationRecords[1].deterministic.length, 1);
+  assert.equal(result.verificationRecords[1].deterministic[0].exitCode, 0);
   assert.equal((await bareCommand(fixture.remote, ['show-ref', '--verify', '--quiet', `refs/heads/${fixture.worktree.branch}`])).exitCode, 1,
     'the stage branch is never pushed');
 
-  const remoteMainBefore = await bareRevParse(fixture.remote, 'refs/heads/main');
   await fixture.execution.approve('failed-run', 'reviewer', 'recovery approved');
   assert.equal(await bareRevParse(fixture.remote, `refs/heads/${fixture.integration}`), result.resultCommit);
+  assert.equal(await revParse(fixture.target, 'main'), localMainBefore);
   assert.equal(await bareRevParse(fixture.remote, 'refs/heads/main'), remoteMainBefore);
   assert.equal((await bareCommand(fixture.remote, ['show-ref', '--verify', '--quiet', `refs/heads/${fixture.worktree.branch}`])).exitCode, 1);
 });
@@ -250,8 +259,68 @@ test('failed recovery preserves the worktree, branch, builder evidence, and prio
   assert.equal(await bareRevParse(fixture.remote, 'refs/heads/main'), fixture.worktree.baseCommit);
 });
 
+test('invalid verification recovery leaves stage, run, attempts, events, and preserved worktree unchanged', async (t) => {
+  const cases = [
+    {
+      name: 'mismatched active run',
+      mutate(state) { state.stages.A.activeRunId = 'different-run'; },
+      error: /active run does not match/,
+    },
+    {
+      name: 'mismatched stage branch',
+      mutate(state) { state.stages.A.branch = 'orchestrator/A/different-run'; },
+      error: /branch does not match/,
+    },
+    {
+      name: 'mismatched stage worktree',
+      mutate(state) { state.stages.A.worktreePath = `${state.stages.A.worktreePath}-other`; },
+      error: /worktree does not match/,
+    },
+    {
+      name: 'non-failed run',
+      mutate(state) { state.runs['failed-run'].status = 'completed'; },
+      error: /is not failed/,
+    },
+    {
+      name: 'active process on preserved branch',
+      mutate(state) {
+        const failed = state.runs['failed-run'];
+        state.runs['active-run'] = {
+          id: 'active-run', stageId: 'B', status: 'verifying',
+          branch: failed.branch, worktreePath: '/tmp/unrelated-active-worktree',
+        };
+      },
+      error: /active on the preserved worktree or stage branch/,
+    },
+  ];
+
+  for (const scenario of cases) {
+    await t.test(scenario.name, async () => {
+      const fixture = await recoveryFixture({ verificationPassed: true });
+      await fixture.store.update('test.invalidate-recovery', scenario.mutate);
+      await assertRejectedRecoveryPreservesEverything(fixture, scenario.error);
+    });
+  }
+
+  await t.test('missing intended diff', async () => {
+    const fixture = await recoveryFixture({ verificationPassed: true });
+    await rm(path.join(fixture.worktree.path, 'A.txt'));
+    await assertRejectedRecoveryPreservesEverything(fixture, /no longer contains an intended uncommitted diff/);
+  });
+
+  await t.test('verification was not explicitly requested', async () => {
+    const fixture = await recoveryFixture({ verificationPassed: true });
+    await assertRejectedRecoveryPreservesEverything(
+      fixture,
+      /currently requires --from verification/,
+      'builder',
+    );
+  });
+});
+
 test('approval alone advances and pushes only the configured integration branch', async () => {
   const fixture = await approvalFixture();
+  const localMainBefore = await revParse(fixture.target, 'main');
   const remoteMainBefore = await bareRevParse(fixture.remote, 'refs/heads/main');
   assert.equal((await bareCommand(fixture.remote, ['show-ref', '--verify', '--quiet', 'refs/heads/programme/cockpit-complete-build'])).exitCode, 1,
     'an unapproved stage must not be pushed');
@@ -262,6 +331,8 @@ test('approval alone advances and pushes only the configured integration branch'
     'approval advances the local integration branch');
   assert.equal(await bareRevParse(fixture.remote, 'refs/heads/programme/cockpit-complete-build'), fixture.resultCommit,
     'approval pushes the configured integration branch');
+  assert.equal(await revParse(fixture.target, 'main'), localMainBefore,
+    'approval never moves local main');
   assert.equal(await bareRevParse(fixture.remote, 'refs/heads/main'), remoteMainBefore,
     'approval never moves main');
   await assert.rejects(fixture.git.pushIntegrationBranch('main', 'main'), /Refusing to push/);
@@ -361,7 +432,14 @@ async function recoveryFixture(options = {}) {
   await configureIdentity(target);
 
   const integration = 'programme/cockpit-complete-build';
-  const manifestPath = await writeManifest(root, { integrationBranch: integration, pushIntegration: true });
+  const manifestPath = await writeManifest(root, {
+    integrationBranch: integration,
+    pushIntegration: true,
+    ...(options.realVerification ? {
+      verificationCommands: [{ command: process.execPath, args: ['-e', 'process.exit(0)'] }],
+      verifierEnabled: true,
+    } : {}),
+  });
   const loaded = await loadManifest(manifestPath);
   const store = new JsonStateStore(path.join(root, 'state.json'), path.join(root, 'events.jsonl'));
   const programme = new ProgrammeService(loaded, store);
@@ -372,8 +450,11 @@ async function recoveryFixture(options = {}) {
   const priorVerification = { attemptId: 'initial', recordedAt: '2026-01-01T00:00:00.000Z', passed: false,
     verifierSummary: 'GENUINE_BLOCKER: old verifier incorrectly required a commit\nVERIFICATION_FAILED' };
   await store.update('test.failed-run', (state) => {
-    state.stages.A.status = 'failed';
+    state.stages.A.status = 'ready';
     state.stages.A.activeRunId = 'failed-run';
+    state.stages.A.branch = worktree.branch;
+    state.stages.A.worktreePath = worktree.path;
+    state.stages.A.lastError = 'Stage verification failed';
     state.runs['failed-run'] = {
       id: 'failed-run', stageId: 'A', status: 'failed', requestedBy: 'original-operator',
       worktreePath: worktree.path, branch: worktree.branch, baseCommit: worktree.baseCommit,
@@ -384,17 +465,37 @@ async function recoveryFixture(options = {}) {
     };
   });
   const provider = {
-    name: 'mock', builderCalls: 0,
-    async execute() { this.builderCalls += 1; throw new Error('resume must not invoke builder'); },
+    name: 'mock', builderCalls: 0, verifierCalls: 0,
+    async execute(request) {
+      if (request.sandbox === 'read-only') {
+        this.verifierCalls += 1;
+        await options.onVerify?.();
+        return {
+          exitCode: 0,
+          lastMessage: options.verificationPassed
+            ? 'VERIFICATION_PASSED'
+            : 'GENUINE_BLOCKER: live evidence is missing\nVERIFICATION_FAILED',
+        };
+      }
+      this.builderCalls += 1;
+      throw new Error('resume must not invoke builder');
+    },
   };
+  const verificationDelegate = options.realVerification
+    ? new VerificationService(loaded, provider, path.join(root, 'runs'))
+    : {
+      async verify() {
+        await options.onVerify?.();
+        return options.verificationPassed
+          ? { passed: true, deterministic: [{ exitCode: 0 }], verifierSummary: 'VERIFICATION_PASSED' }
+          : { passed: false, deterministic: [{ exitCode: 0 }], verifierSummary: 'GENUINE_BLOCKER: live evidence is missing\nVERIFICATION_FAILED' };
+      },
+    };
   const verification = {
     calls: 0,
-    async verify() {
+    async verify(request) {
       this.calls += 1;
-      await options.onVerify?.();
-      return options.verificationPassed
-        ? { passed: true, deterministic: [{ exitCode: 0 }], verifierSummary: 'VERIFICATION_PASSED' }
-        : { passed: false, deterministic: [{ exitCode: 0 }], verifierSummary: 'GENUINE_BLOCKER: live evidence is missing\nVERIFICATION_FAILED' };
+      return verificationDelegate.verify(request);
     },
   };
   const execution = new ExecutionService(loaded, store, programme, git, provider, verification, path.join(root, 'runs'));
@@ -417,7 +518,10 @@ async function writeManifest(root, options = {}) {
         cleanup_worktree_on_success: false,
       },
       agent: { provider: 'mock', model: 'test-model', sandbox: 'workspace-write', timeout_ms: 10_000 },
-      verification: { commands: options.verificationCommands ?? [], verifier_agent: { enabled: false, sandbox: 'read-only' } },
+      verification: {
+        commands: options.verificationCommands ?? [],
+        verifier_agent: { enabled: options.verifierEnabled ?? false, sandbox: 'read-only' },
+      },
     },
     phases: [{ id: 'p', name: 'P', stages: [
       { id: 'A', name: 'Stage A', prompt_path: 'prompts/a.md' },
@@ -462,4 +566,24 @@ async function must(program, args, cwd) {
   const result = await command(program, args, cwd);
   assert.equal(result.exitCode, 0, result.stderr || result.stdout);
   return result;
+}
+
+async function assertRejectedRecoveryPreservesEverything(fixture, error, from = 'verification') {
+  const stateBefore = await fixture.store.read();
+  const eventsBefore = await readFile(fixture.store.eventLogPath, 'utf8');
+  const headBefore = await revParse(fixture.worktree.path, 'HEAD');
+  const statusBefore = (await command('git', ['status', '--porcelain'], fixture.worktree.path)).stdout;
+
+  await assert.rejects(
+    fixture.execution.resumeRun('failed-run', from, 'recovery-operator'),
+    error,
+  );
+
+  assert.deepEqual(await fixture.store.read(), stateBefore);
+  assert.equal(await readFile(fixture.store.eventLogPath, 'utf8'), eventsBefore);
+  assert.equal(await revParse(fixture.worktree.path, 'HEAD'), headBefore);
+  assert.equal((await command('git', ['status', '--porcelain'], fixture.worktree.path)).stdout, statusBefore);
+  assert.equal(fixture.provider.builderCalls, 0);
+  assert.equal(fixture.provider.verifierCalls, 0);
+  assert.equal(fixture.verification.calls, 0);
 }
