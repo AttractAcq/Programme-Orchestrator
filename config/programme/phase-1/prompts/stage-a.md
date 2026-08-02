@@ -158,6 +158,165 @@ No Stage B schema or architecture change starts until the repository and deploym
 
 ---
 
+## Frozen Stage A verification acceptance contract
+
+This is the finite implementation-verification contract for Programme Stage A.
+It governs the independent verifier and takes precedence, for pre-commit
+verification classification only, over broader wording elsewhere in this
+prompt whose completion is owned by the orchestrator lifecycle. The verifier
+must inspect every gate, but it must not introduce new acceptance requirements
+outside Gates 1–12.
+
+### Gate 1 — Repository identity
+
+- The worktree is the correct Cockpit repository and Stage A branch.
+- The frozen base commit is
+  `7d4c1b96cdd7f3a59e28dc9826b44b1aad3b4e5e`.
+- No unexpected branch switch, merge, or production checkout occurred.
+
+### Gate 2 — Intended snapshot integrity
+
+- Every tracked modification and intended untracked file is enumerated.
+- Intended-tree hygiene and `git diff --check` pass, with no unresolved conflict
+  markers.
+- No secrets, credentials, linked Supabase metadata, or private environment
+  files are included.
+- The deterministic snapshot fingerprint covers the entire intended snapshot
+  except its explicit recursion exclusion.
+
+### Gate 3 — Production behavior boundary
+
+- The frozen-base diff under `src`, `supabase/functions`, and
+  `supabase/migrations` is empty unless an explicitly approved Stage A
+  correction requires otherwise.
+- Every production/runtime change has matching validation evidence.
+
+### Gate 4 — Current-state inventory
+
+- The machine-readable Stage A inventory is current.
+- Route, tab, table, function, migration, provider, lifecycle, placeholder, and
+  deprecated-path classifications reconcile.
+- Inventory identity is content-based and survives an identical-content
+  snapshot commit.
+
+### Gate 5 — Live-state evidence
+
+A timestamped, read-only, provenance-bound capture confirms:
+
+- production project ref `xivewedajschthjlblfb`;
+- linked migration list and linked database push dry run;
+- deployed Edge Function list and linked database lint;
+- schema-only production dump;
+- GitHub Pages configuration, successful workflow, and deployed SHA;
+- live Pages HTTP response.
+
+Every required live artifact is present, hash-valid, and bound to command,
+project, time, tool version, and exit status.
+
+### Gate 6 — Route B reconstruction
+
+The repository contains an immutable captured production schema authority,
+deterministic executable application-schema projection, bootstrap
+configuration/data, explicit post-cutover migration rule, and guarded
+disposable reconstruction runner. Reconstruction starts from an empty
+application schema and completes successfully.
+
+### Gate 7 — Executed database evidence
+
+The disposable PostgreSQL run executes and passes:
+
+- catalogue checks at the documented scope;
+- RLS enabled/count checks and representative restricted grants;
+- storage, required seeds, and held/deprecated absence;
+- symmetric two-client isolation;
+- representative constraints and foreign keys;
+- representative global/client-scoped uniqueness;
+- actual database idempotency create/replay/conflict behavior;
+- cleanup and zero remaining containers.
+
+Behavioral database evidence is representative unless explicitly documented
+otherwise. Exhaustive behavior for every database object is not required.
+
+### Gate 8 — Database execution source binding
+
+The disposable database transcript is deterministically bound to the exact
+current bytes of the database runner, Supabase configuration, executable
+schema, captured schema authority, bootstrap data, baseline manifest, all
+executed verification SQL, every applicable post-cutover migration, and the
+baseline-generation and comparison utilities used by the run. The checker
+independently recomputes and matches this binding.
+
+### Gate 9 — Build, CI, and deterministic tests
+
+The exact supported CI runtime passes dependency installation, typecheck, lint
+with zero errors, canonical `npm test`, and build. The canonical deterministic
+suite has zero failures, zero skips, stable totals, and final-source content
+binding. Provider responses may remain mocked where accurately classified.
+
+### Gate 10 — Read-only and checkout portability
+
+- Tests pass with the repository non-writable.
+- Evidence validation passes in a byte-identical checkout with new filesystem
+  modification times.
+- Evidence freshness uses path-and-byte identity rather than modification
+  times or checkout-local metadata.
+
+### Gate 11 — Evidence consistency
+
+- Every transcript hash matches.
+- Every required command, runtime/tool version, UTC range, and exit status is
+  recorded.
+- Every evidence schema version is supported.
+- Current report claims do not exceed their evidence; representative evidence
+  is not described as exhaustive.
+- External and deferred state is clearly classified.
+
+### Gate 12 — Cleanup and safety
+
+- No disposable Docker containers remain.
+- No production mutation, deployment, linked migration application, Edge
+  Function invocation, or Stage B work occurred.
+- The Stage A implementation worktree remains uncommitted until the
+  orchestrator snapshots it.
+
+### Frozen classification boundaries
+
+`GENUINE_BLOCKER` is permitted only when a Gate 1–12 requirement fails,
+evidence supporting a gate is missing/stale/contradictory/false, a material
+security/data-loss/production-safety defect is found, or snapshotting the exact
+current tree would knowingly create an invalid baseline. Every blocker must be
+mapped to the relevant gate.
+
+The following are `NON_BLOCKING_IMPROVEMENT`, not blockers: stronger forensic
+attestation outside Gates 1–12; additional representative tests beyond the
+named database classes; transcript-format improvements; more exhaustive ACL,
+policy, constraint, or RPC behavior testing; dependency audit advisories; lint
+warnings when lint exits zero; optional privacy sanitization; stylistic or
+documentation improvements; future migration behavior while the post-cutover
+set is zero; and standalone legacy tests outside the canonical suite unless a
+frozen gate explicitly requires them.
+
+The following are `LIFECYCLE_PENDING`: snapshot commit, clean post-snapshot
+worktree, result commit SHA, human approval, integration-branch advancement,
+push, and authorization to begin Stage B.
+
+The following are `DEFERRED_EXTERNAL_STATE` where already documented: Cron
+scheduling; Vault values and provider secrets; Auth users/dashboard state;
+external provider/account configuration; the insights-worker installer; and
+intentionally unscheduled workers.
+
+### Frozen verification output rule
+
+The final result is based only on Gates 1–12. A blocker line must use
+`GENUINE_BLOCKER: GATE_n: description`, where `n` is 1–12. Other findings use
+`LIFECYCLE_PENDING:`, `DEFERRED_EXTERNAL_STATE:`, or
+`NON_BLOCKING_IMPROVEMENT:`. When all gates pass and only lifecycle, deferred,
+non-blocking, or out-of-contract suggestions remain, the verifier must return
+`VERIFICATION_PASSED` and must not continue searching for new acceptance
+categories.
+
+---
+
 ## Full-circle implementation instruction
 
 Complete every part of Programme Stage A required to satisfy its objective, scope, required outputs, acceptance criteria and exit gate.

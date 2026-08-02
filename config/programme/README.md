@@ -31,4 +31,9 @@ The production graph is `../BUILD_SEQUENCE.json`. All 43 stages are sequentially
 
 Approved source documents are imported without rewriting. Generated standalone prompts reproduce the authoritative stage section and add only execution, safety, verification and operator-report framing.
 
+The Stage A standalone prompt also carries its explicitly approved frozen
+Gates 1–12 verification contract. That finite contract governs Stage A
+pre-commit blocker classification without altering the source build plan or any
+other stage contract.
+
 The target `AttractAcq/Cockpit` repository remains the authority for current implementation state. These files govern intended future state and execution order.

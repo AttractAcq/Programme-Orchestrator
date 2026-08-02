@@ -84,6 +84,14 @@ builder completes
 
 During pre-commit verification, `HEAD` may still equal the stage base, intended changes must remain uncommitted, the isolated worktree is expected to be dirty, no stage or integration branch has been pushed, and no final snapshot SHA exists. These are `LIFECYCLE_PENDING` observations, not implementation failures. Incorrect or incomplete work, failed checks, unsafe or unrelated changes, missing evidence, stale/mocked claims, required current live verification, and a required but irreproducible migration chain remain genuine blockers when the stage authority requires them.
 
+Programme Stage A has a frozen, finite implementation-verification contract in
+`config/programme/phase-1/prompts/stage-a.md`. Its independent verifier may
+block only a cited Gate 1–12 failure using `GENUINE_BLOCKER: GATE_n:`. Snapshot,
+approval, integration, push, and Stage B authorization remain
+`LIFECYCLE_PENDING`; documented external state and optional improvements cannot
+be promoted into blockers. This Stage-A-only rule prevents verification scope
+from expanding while preserving deterministic inspection of every frozen gate.
+
 ## Requirements
 
 - Node.js 22+

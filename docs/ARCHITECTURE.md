@@ -29,6 +29,15 @@ The lifecycle gates are distinct and ordered:
 
 The pre-commit verifier treats a dirty worktree, base-valued `HEAD`, absent stage commit, absent pushes, pending approval, and absent final snapshot SHA as expected lifecycle state. It classifies them as `LIFECYCLE_PENDING`. It fails closed on genuine implementation/evidence blockers, including required current live verification or migration reproducibility that the later commit/approval/push sequence cannot supply. A lifecycle-only failed verdict can be normalized to pass only when every reported finding is explicitly classified `LIFECYCLE_PENDING`; unclassified, mixed, or genuine-blocker failures remain failed.
 
+Stage A additionally uses the finite Gates 1–12 contract embedded in its
+standalone prompt. A Stage A blocker must cite one of those gates as
+`GENUINE_BLOCKER: GATE_n:`. The verification service separately records
+`LIFECYCLE_PENDING`, `DEFERRED_EXTERNAL_STATE`,
+`NON_BLOCKING_IMPROVEMENT`, and attempted out-of-contract blockers. A failed
+model verdict containing only those non-blocking classes is normalized to pass;
+a cited frozen-gate failure still fails closed. Other stage contracts and their
+existing verifier classification behavior are unchanged.
+
 ## Cumulative branch and approval model
 
 ```text

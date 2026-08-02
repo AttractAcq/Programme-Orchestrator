@@ -2,8 +2,8 @@
   "schema_version": 1,
   "files": {
     "README.md": {
-      "sha256": "f808781806ec92fe2d7d690f30c3772601a7e4e192e2de2a0d9ba8292f511edf",
-      "bytes": 1854,
+      "sha256": "8af2e87c4f9f00c773585ef08724f74c22cdac1bfffbe4d6ecffc8b3a220db51",
+      "bytes": 2104,
       "generated": true
     },
     "phase-1/README.md": {
@@ -27,8 +27,8 @@
       "generated": false
     },
     "phase-1/prompts/stage-a.md": {
-      "sha256": "cef04b4799cce908a4f160d03b2f662412b4911fdf46bbbae7c5e61bc9906d4f",
-      "bytes": 13612,
+      "sha256": "4fb95ba868d96fcb14ddda31755e4e249906c5b265e1f09ea3c57c9bd1f28c3a",
+      "bytes": 20585,
       "generated": true
     },
     "phase-1/prompts/stage-b.md": {

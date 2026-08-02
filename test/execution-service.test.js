@@ -107,9 +107,9 @@ test('real builder request receives configured model, workspace-write sandbox, t
 });
 
 test('verifier receives exact authority, policy, stage identity, base, diff, same model, and read-only sandbox', async () => {
-  const exact = '# Stage A\n\nObjective one.\nExit gate: all checks pass.';
+  const exact = '# Stage B\n\nObjective one.\nExit gate: all checks pass.';
   const stage = {
-    id: 'A', name: 'Authority Stage', verification: { commands: [], verifier_agent: { enabled: true } },
+    id: 'B', name: 'Authority Stage', verification: { commands: [], verifier_agent: { enabled: true } },
   };
   let request;
   const provider = {
@@ -119,7 +119,7 @@ test('verifier receives exact authority, policy, stage identity, base, diff, sam
     },
   };
   const loaded = {
-    stages: new Map([['A', stage]]),
+    stages: new Map([['B', stage]]),
     manifest: { defaults: {
       agent: { model: 'shared-model', timeout_ms: 1234 },
       verification: { commands: [], verifier_agent: { enabled: true, sandbox: 'read-only' } },
@@ -127,7 +127,7 @@ test('verifier receives exact authority, policy, stage identity, base, diff, sam
   };
   const service = new VerificationService(loaded, provider, '/tmp/test-logs');
   const result = await service.verify({
-    stageId: 'A', runId: 'run', cwd: process.cwd(), stagePrompt: exact,
+    stageId: 'B', runId: 'run', cwd: process.cwd(), stagePrompt: exact,
     executionPolicy: ORCHESTRATOR_EXECUTION_POLICY, baseCommit: 'abc123', diffContext: 'diff --git a/a b/a',
   });
   assert.equal(result.passed, true);
@@ -135,7 +135,7 @@ test('verifier receives exact authority, policy, stage identity, base, diff, sam
   assert.equal(request.sandbox, 'read-only');
   assert.ok(request.prompt.includes(`--- BEGIN EXACT STANDALONE STAGE PROMPT ---\n${exact}\n--- END EXACT STANDALONE STAGE PROMPT ---`));
   assert.ok(request.prompt.includes(ORCHESTRATOR_EXECUTION_POLICY));
-  assert.match(request.prompt, /Stage ID: A/);
+  assert.match(request.prompt, /Stage ID: B/);
   assert.match(request.prompt, /Stage name: Authority Stage/);
   assert.match(request.prompt, /Base commit: abc123/);
   assert.match(request.prompt, /diff --git a\/a b\/a/);
@@ -145,10 +145,10 @@ test('verifier receives exact authority, policy, stage identity, base, diff, sam
   assert.match(request.prompt, /Current required live verification and a required reproducible migration chain remain genuine blockers/);
 });
 
-test('pre-commit verifier normalizes lifecycle-only dirty, uncommitted, and unpushed findings without waiving genuine blockers', async () => {
-  const stage = { id: 'A', name: 'Stage A', verification: { commands: [], verifier_agent: { enabled: true } } };
+test('default pre-commit verifier normalizes lifecycle-only findings without changing non-Stage-A contracts', async () => {
+  const stage = { id: 'B', name: 'Stage B', verification: { commands: [], verifier_agent: { enabled: true } } };
   const loaded = {
-    stages: new Map([['A', stage]]),
+    stages: new Map([['B', stage]]),
     manifest: { defaults: {
       agent: { model: 'test', timeout_ms: 1000 },
       verification: { commands: [], verifier_agent: { enabled: true } },
@@ -162,7 +162,7 @@ test('pre-commit verifier normalizes lifecycle-only dirty, uncommitted, and unpu
   const provider = { execute: async () => ({ exitCode: 0, lastMessage: message }) };
   const verification = new VerificationService(loaded, provider, '/tmp/test-logs');
   const lifecycleOnly = await verification.verify({
-    stageId: 'A', runId: 'run', cwd: process.cwd(), stagePrompt: '# A',
+    stageId: 'B', runId: 'run', cwd: process.cwd(), stagePrompt: '# B',
     executionPolicy: ORCHESTRATOR_EXECUTION_POLICY, baseCommit: 'base', diffContext: 'dirty diff',
   });
   assert.equal(lifecycleOnly.passed, true);
@@ -174,7 +174,7 @@ test('pre-commit verifier normalizes lifecycle-only dirty, uncommitted, and unpu
     'VERIFICATION_FAILED',
   ].join('\n');
   const blocked = await verification.verify({
-    stageId: 'A', runId: 'run-2', cwd: process.cwd(), stagePrompt: '# A',
+    stageId: 'B', runId: 'run-2', cwd: process.cwd(), stagePrompt: '# B',
     executionPolicy: ORCHESTRATOR_EXECUTION_POLICY, baseCommit: 'base', diffContext: 'dirty diff',
   });
   assert.equal(blocked.passed, false);
@@ -474,7 +474,7 @@ async function recoveryFixture(options = {}) {
           exitCode: 0,
           lastMessage: options.verificationPassed
             ? 'VERIFICATION_PASSED'
-            : 'GENUINE_BLOCKER: live evidence is missing\nVERIFICATION_FAILED',
+            : 'GENUINE_BLOCKER: GATE_5: live evidence is missing\nVERIFICATION_FAILED',
         };
       }
       this.builderCalls += 1;
@@ -505,7 +505,13 @@ async function recoveryFixture(options = {}) {
 async function writeManifest(root, options = {}) {
   const prompts = path.join(root, 'prompts');
   await mkdir(prompts, { recursive: true });
-  await writeFile(path.join(prompts, 'a.md'), '# A\n');
+  await writeFile(path.join(prompts, 'a.md'), [
+    '# A',
+    '## Frozen Stage A verification acceptance contract',
+    ...Array.from({ length: 12 }, (_, index) => `### Gate ${index + 1} — Fixture gate`),
+    'GENUINE_BLOCKER LIFECYCLE_PENDING DEFERRED_EXTERNAL_STATE NON_BLOCKING_IMPROVEMENT',
+    '## Full-circle implementation instruction',
+  ].join('\n'));
   await writeFile(path.join(prompts, 'b.md'), '# B\n');
   const manifestPath = path.join(root, 'manifest.json');
   await writeFile(manifestPath, JSON.stringify({
